@@ -50,6 +50,23 @@ derive only conservative, process-wide AArch64 extensions from the kernel's
 `Features` line and execute a broker/client smoke benchmark before reporting
 success.
 
+## 2026-08-16 Tab S8+ native broker
+
+The corrected Bionic build used Clang 21 ThinLTO and the kernel-reported common
+`armv8-a+crc+crypto+lse` feature set. One 20,000-operation pass after the
+built-in warmup measured:
+
+| Case | ns/operation | operations/second |
+|---|---:|---:|
+| `PING` | 103,581.8 | 9,654 |
+| `GETVAL` | 111,666.6 | 8,955 |
+| persistent client `PING` | 120,025.8 | 8,332 |
+| persistent client `GETVAL` | 108,384.3 | 9,226 |
+
+This establishes that the native service and optimized client execute on the
+target. It is not yet a PRoot-versus-native Steam result: the patched glibc
+package must pass its public API suite before that A/B is valid.
+
 ## Rules for performance claims
 
 1. Reuse a persistent connection; reconnect cost is not a hot-path design.

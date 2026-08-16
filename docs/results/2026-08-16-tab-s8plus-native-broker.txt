@@ -1,0 +1,39 @@
+device=Samsung SM-X808U Galaxy Tab S8+
+kernel=Linux 5.10.236-android12-9-32140295-abX808USQSAEZF1 aarch64 Android
+compiler=Termux Clang 21.1.8
+source_commit=7723ef4
+release_flags=-O3 -flto=thin -march=armv8-a+crc+crypto+lse
+
+scripts/build-release.sh --native --check --jobs 8
+
+capability probes:
+pthread-basic: PASS
+robust-list: UNSUPPORTED (Android seccomp SIGSYS)
+sysv-shm: PASS
+sysv-semaphore: UNSUPPORTED (Android seccomp SIGSYS)
+summary: pass=2 unsupported=2 fail=0
+
+native Bionic broker/client suite:
+sem-store: PASS
+protocol: PASS
+broker-dispatch: PASS
+transport: PASS
+transport-security: PASS
+broker-integration: PASS
+client: PASS
+
+optimized persistent-socket benchmark, 20,000 measured operations after warmup:
+ping: 103581.8 ns/op, 9654 ops/s
+getval: 111666.6 ns/op, 8955 ops/s
+client-ping: 120025.8 ns/op, 8332 ops/s
+client-getval: 108384.3 ns/op, 9226 ops/s
+
+session lifecycle:
+start: PASS
+status: PASS
+SIGTERM stop: PASS
+
+The first -mcpu=native build was intentionally rejected after its execution
+smoke test raised SIGILL. Clang selected Cortex-X2 plus SVE/SVE2 even though
+Android did not expose SVE. The recorded run uses the corrected common-feature
+flags above.

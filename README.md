@@ -83,9 +83,16 @@ shared memory pass; robust-list and SysV semaphore calls return `ENOSYS`. This
 confirms that semaphore compatibility is the first implementation target. See
 the [raw result](docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt).
 
-A safe isolated tablet package test and the first native Steam client launch
-are the next implementation milestones. The integration overlay and its exact
-upstream pin are documented in
+The native Bionic broker is now built and execution-tested on the same tablet.
+All seven state/protocol/transport/client suites pass, including fork handling,
+blocking wakeups, timed waits, and process-exit `SEM_UNDO`. A 20,000-operation
+optimized pass measured 9,226 complete persistent-client `GETVAL` calls per
+second. See the [device result](docs/results/2026-08-16-tab-s8plus-native-broker.txt).
+
+The patched-glibc package test and first native Steam client launch remain
+isolated next milestones. The stock tablet glibc and Steam login state have not
+been replaced. The integration overlay and its exact upstream pin are
+documented in
 [`integration/termux-glibc/README.md`](integration/termux-glibc/README.md).
 See also [`docs/ROADMAP.md`](docs/ROADMAP.md).
 

@@ -25,6 +25,7 @@
 
 ## Milestone 2: Termux glibc integration
 
+- [x] Build and validate the optimized native ARM64 broker on the Tab S8+
 - [x] Patch glibc's SysV semaphore entry points to the client library
 - [x] Link a host glibc 2.44 `libc.so` and pass the public black-box suite
 - [ ] Build through the official `termux/glibc-packages` recipe
