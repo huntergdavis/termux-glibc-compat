@@ -5,10 +5,14 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "tgcompat/android_root.h"
 
 int main(void) {
+    struct stat metadata;
+    int descriptor;
     int retry_flags = -1;
     int original = O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY;
 
@@ -34,6 +38,13 @@ int main(void) {
         ENOENT, &retry_flags));
     assert(!tgcompat_android_root_retry_flags("/proc/self/root",
         original | O_PATH, EACCES, &retry_flags));
+
+    descriptor = openat(AT_FDCWD, "/proc/self/root",
+        O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
+    assert(descriptor >= 0);
+    assert(fstat(descriptor, &metadata) == 0);
+    assert(S_ISDIR(metadata.st_mode));
+    assert(close(descriptor) == 0);
 
     puts("Android real-root shim policy: PASS");
     return 0;
