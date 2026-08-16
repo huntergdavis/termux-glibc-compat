@@ -134,14 +134,17 @@ make release
 ```
 
 The production helper selects ThinLTO under Clang, parallelizes the build, and
-tunes for the current CPU by default:
+tunes for kernel-reported CPU features by default:
 
 ```sh
 scripts/build-release.sh --native --check
 ```
 
 Use `--portable` for a redistributable binary. Published binaries deliberately
-do not assume one ARM core design.
+do not assume one ARM core design. On heterogeneous AArch64 Android devices the
+helper deliberately avoids `-mcpu=native`: Clang can select the largest core
+and emit SVE instructions that Android does not expose uniformly. A post-link
+broker/client smoke benchmark rejects such unusable builds immediately.
 
 The session helper owns a private runtime directory and performs PID/executable
 validation before signaling anything:

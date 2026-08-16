@@ -42,6 +42,14 @@ high-level persistent client measured median 42,823.6 ns `PING` and 46,793.3 ns
 `GETVAL`, or roughly 21,400 complete validated `GETVAL` calls per second. It
 adds fork detection and full response correlation without reconnecting.
 
+The first Tab S8+ ThinLTO build also established that Clang 21's
+`-mcpu=native` is unsafe on this heterogeneous Android CPU: it selected
+Cortex-X2 and enabled SVE/SVE2, while `/proc/cpuinfo` did not expose SVE to the
+process, and the optimized benchmark raised `SIGILL`. Native release builds now
+derive only conservative, process-wide AArch64 extensions from the kernel's
+`Features` line and execute a broker/client smoke benchmark before reporting
+success.
+
 ## Rules for performance claims
 
 1. Reuse a persistent connection; reconnect cost is not a hot-path design.

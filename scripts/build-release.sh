@@ -68,7 +68,26 @@ cpu_flag=
 if [[ $profile == native ]]; then
     target=$($compiler -dumpmachine 2>/dev/null || true)
     case $target in
-        aarch64*|arm*) cpu_flag=-mcpu=native ;;
+        aarch64*)
+            # Clang 21 maps -mcpu=native to the largest core on heterogeneous
+            # Android systems. On the Tab S8+ that incorrectly enabled SVE/SVE2
+            # even though the kernel did not expose either feature, producing
+            # a binary that linked successfully and then raised SIGILL. Build
+            # only from features Linux reports as process-wide instead.
+            arm_march=armv8-a
+            cpu_features=" $(sed -n 's/^Features[[:space:]]*:[[:space:]]*/ /p' \
+                /proc/cpuinfo 2>/dev/null | head -n 1) "
+            [[ $cpu_features == *' crc32 '* ]] && arm_march+=+crc
+            if [[ $cpu_features == *' aes '* &&
+                    $cpu_features == *' pmull '* &&
+                    $cpu_features == *' sha1 '* &&
+                    $cpu_features == *' sha2 '* ]]; then
+                arm_march+=+crypto
+            fi
+            [[ $cpu_features == *' atomics '* ]] && arm_march+=+lse
+            cpu_flag="-march=$arm_march"
+            ;;
+        arm*) cpu_flag=-mcpu=native ;;
         *) cpu_flag=-march=native ;;
     esac
 fi
@@ -91,6 +110,10 @@ make_args=(
 )
 
 make "${make_args[@]}" release
+
+# This exercises optimized code in both the daemon and client instead of
+# accepting link success as proof that device-specific instructions execute.
+"$repo_dir/build/benchmark-broker-roundtrip" 100 >/dev/null
 
 if ((run_checks != 0)); then
     make -C "$repo_dir" -j"$jobs" clean
