@@ -64,8 +64,11 @@ built-in warmup measured:
 | persistent client `GETVAL` | 108,384.3 | 9,226 |
 
 This establishes that the native service and optimized client execute on the
-target. It is not yet a PRoot-versus-native Steam result: the patched glibc
-package must pass its public API suite before that A/B is valid.
+target. The official patched glibc package now also passes its extracted public
+API suite, and the native Steam/CEF dependency preflight passes through its
+content-addressed loader. It is still not a PRoot-versus-native Steam result:
+an interactive client launch and matched game benchmark are required for that
+claim.
 
 ## Rules for performance claims
 

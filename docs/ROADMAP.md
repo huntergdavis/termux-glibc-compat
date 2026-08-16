@@ -28,8 +28,9 @@
 - [x] Build and validate the optimized native ARM64 broker on the Tab S8+
 - [x] Patch glibc's SysV semaphore entry points to the client library
 - [x] Link a host glibc 2.44 `libc.so` and pass the public black-box suite
-- [ ] Build through the official `termux/glibc-packages` recipe
-- [ ] Run glibc's `test-sysvsem` plus this repository's black-box suite
+- [x] Build through the official `termux/glibc-packages` recipe
+- [x] Run this repository's black-box suite through the extracted package
+- [ ] Run glibc's `test-sysvsem`
 - [x] Document packaging, rollback, and coexistence with stock glibc
 
 ## Milestone 3: native Steam client
@@ -43,8 +44,8 @@
 
 ## Milestone 4: runtime and games
 
-- [ ] Isolate Pressure Vessel namespace/filesystem requirements
-- [ ] Start Proton/FEX outside PRoot or document the remaining boundary
+- [x] Isolate Pressure Vessel namespace/filesystem requirements
+- [x] Document the required PRoot boundary for Pressure Vessel/Proton/FEX
 - [ ] Re-run the Tomb Raider built-in benchmark with matched settings and
       thermal state
 - [ ] Publish CPU, GPU, memory, frame-time, and correctness comparisons

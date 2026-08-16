@@ -80,6 +80,12 @@ loader layout, prints the package hash and dependency resolution, runs the
 complete public semaphore probe, then removes only its validated temporary
 directory. Existing Steam client/config files are outside its scope.
 
+This gate passed on the Tab S8+ for the official-recipe glibc 2.44 package with
+SHA-256
+`bd490b547660f7857e26a02fff168d7818e1b6d49adab37f0cc7d7566c9aed7c`.
+`semget`, control operations, cross-process blocking, and wakeup completed
+through the extracted candidate loader and `tgcompatd`.
+
 After that test passes, stage the exact package in a content-addressed,
 user-owned directory:
 

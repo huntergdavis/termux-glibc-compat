@@ -5,8 +5,9 @@ unrooted Termux app sandbox—without putting every syscall through PRoot's
 `ptrace` tracer.
 
 This is an early research and implementation project. The native glibc patch
-is host-validated, but it does **not** yet run Steam or Proton without PRoot on
-the tablet.
+now passes its public API suite from an official Termux package on the tablet,
+and the native Steam/CEF dependency preflight passes. An interactive native
+Steam launch and matched game benchmark are still pending.
 
 ## Why this exists
 
@@ -71,6 +72,8 @@ The first milestone is checked in:
   reconnects in steady-state calls;
 - a pinned Termux glibc 2.44 package overlay that preserves public symbol and
   time ABIs while replacing only the semaphore syscall boundary;
+- a successful build through the official pinned `termux/glibc-packages`
+  recipe, followed by extraction-only and content-addressed tablet validation;
 - a successful real `libc.so` link and public-API probe through that built
   loader against `tgcompatd`;
 - an opt-in, no-copy execution shim that runs unmodified Linux ELF children
@@ -92,10 +95,15 @@ blocking wakeups, timed waits, and process-exit `SEM_UNDO`. A 20,000-operation
 optimized pass measured 9,226 complete persistent-client `GETVAL` calls per
 second. See the [device result](docs/results/2026-08-16-tab-s8plus-native-broker.txt).
 
-The patched-glibc package test and first native Steam client launch remain
-isolated next milestones. The stock tablet glibc and Steam login state have not
-been replaced. The integration overlay and its exact upstream pin are
-documented in
+The exact `glibc_2.44_aarch64.deb` has SHA-256
+`bd490b547660f7857e26a02fff168d7818e1b6d49adab37f0cc7d7566c9aed7c`.
+Its own loader resolves the public semaphore probe against only the extracted
+candidate libraries, and the full control/wakeup test passes against the
+same-UID broker. The package is selected under
+`~/.local/share/tgcompat/glibc`; the active `$PREFIX/glibc`, official Steam
+depot, and saved login state remain unchanged. See the
+[device package result](docs/results/2026-08-16-tab-s8plus-official-glibc-package.txt).
+The integration overlay and its exact upstream pin are documented in
 [`integration/termux-glibc/README.md`](integration/termux-glibc/README.md).
 See also [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
@@ -106,6 +114,14 @@ patched or copied. `TGCOMPAT_LIBRARY_PATH` supplies the loader search path and
 `TGCOMPAT_EXEC_DISABLE=1` is a fail-safe bypass. The test fixture gives its
 target a deliberately nonexistent interpreter and verifies direct, PATH-based,
 variadic, and spawned child launches through the real selected loader.
+
+`build/libtgcompat-android-root.so` is a separately gated experiment. Android
+denies a read-open of `/proc/self/root`, while an `O_PATH` descriptor is usable
+for Valve's fd-relative traversal. With `TGCOMPAT_ANDROID_ROOT_O_PATH=1`, the
+shim retries only that exact read-directory failure. This moved native
+Pressure Vessel to Bubblewrap on the Tab S8+, but the kernel then returned
+`EINVAL` for user namespaces and `EPERM` for mount namespaces. It is therefore
+tested groundwork, not a replacement for the game-boundary PRoot process.
 
 ## Run the broker
 

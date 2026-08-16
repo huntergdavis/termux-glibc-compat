@@ -1,0 +1,17 @@
+device=Samsung Galaxy Tab S8+
+android_kernel=5.10.236-android12-9-32140295-abX808USQSAEZF1
+upstream_glibc_packages_commit=954c6b200aa001088fcc420550b9304dd81229b8
+package=glibc_2.44_aarch64.deb
+package_bytes=9133928
+package_sha256=bd490b547660f7857e26a02fff168d7818e1b6d49adab37f0cc7d7566c9aed7c
+package_recipe_build=PASS
+package_architecture=aarch64
+public_symbols=semget@@GLIBC_2.17 semctl@@GLIBC_2.17 semop@@GLIBC_2.17 semtimedop@@GLIBC_2.17
+extracted_candidate_dependency_audit=PASS
+public_probe=SysV semaphore control and wakeup: ok
+extracted_patched_glibc_package=PASS
+content_addressed_stage=PASS
+active_termux_glibc=unchanged
+native_steam_dependency_preflight=PASS
+steam_ui_launched=no
+steam_login_state_modified=no
