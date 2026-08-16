@@ -12,8 +12,9 @@ usage() {
     cat <<'EOF'
 Usage: scripts/build-release.sh [--native|--portable] [--check] [--jobs N]
 
-Builds the broker, glibc execution shim, and static client with LTO. Native
-mode tunes for the current device; portable mode is redistributable.
+Builds the broker, glibc execution and Android-root shims, and static client
+with LTO. Native mode tunes for the current device; portable mode is
+redistributable.
 EOF
 }
 
@@ -131,7 +132,8 @@ if ((run_checks != 0)); then
     env -u MAKEFLAGS make -C "$repo_dir" -j1 check-broker
     "$stripper" --strip-unneeded \
         "$repo_dir/build/tgcompatd" \
-        "$repo_dir/build/libtgcompat-exec.so"
+        "$repo_dir/build/libtgcompat-exec.so" \
+        "$repo_dir/build/libtgcompat-android-root.so"
 fi
 
 printf 'built %s\n' "$repo_dir/build/tgcompatd"

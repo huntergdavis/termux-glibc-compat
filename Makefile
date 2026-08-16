@@ -21,6 +21,10 @@ EXEC_SHIM_CFLAGS ?= -O3 -DNDEBUG -fPIC -fvisibility=hidden \
 	-fno-semantic-interposition -ffunction-sections -fdata-sections
 EXEC_SHIM_LDFLAGS ?= -shared -Wl,-O2,--as-needed,--gc-sections \
 	-Wl,-z,relro,-z,now
+ANDROID_ROOT_SHIM_CFLAGS ?= -O3 -DNDEBUG -fPIC -fvisibility=hidden \
+	-fno-semantic-interposition -ffunction-sections -fdata-sections
+ANDROID_ROOT_SHIM_LDFLAGS ?= -shared -Wl,-O2,--as-needed,--gc-sections \
+	-Wl,-z,relro,-z,now
 
 WARNINGS := -Wall -Wextra -Werror -Wpedantic -Wcast-qual -Wformat=2 \
 	-Wshadow -Wstrict-prototypes
@@ -38,7 +42,8 @@ TESTS := build/test-sem-store build/test-protocol build/test-broker-dispatch \
 	release
 
 all: $(PROBES) build/tgcompatd build/libtgcompat-client.a \
-	build/libtgcompat-exec.so $(TESTS)
+	build/libtgcompat-exec.so build/libtgcompat-android-root.so \
+	build/test-android-root-shim $(TESTS)
 
 build:
 	mkdir -p $@
@@ -88,6 +93,16 @@ build/tgcompatd: src/tgcompatd.c $(CORE_OBJECTS) $(SERVER_OBJECTS) | build
 build/libtgcompat-exec.so: src/exec_shim.c | build
 	$(GLIBC_CC) $(CPPFLAGS) $(EXEC_SHIM_CFLAGS) $(WARNINGS) -std=c11 \
 		$< $(EXEC_SHIM_LDFLAGS) -ldl -o $@
+
+build/libtgcompat-android-root.so: src/android_root_shim.c \
+		include/tgcompat/android_root.h | build
+	$(GLIBC_CC) $(CPPFLAGS) $(ANDROID_ROOT_SHIM_CFLAGS) $(WARNINGS) \
+		-Iinclude -std=c11 $< $(ANDROID_ROOT_SHIM_LDFLAGS) -ldl -o $@
+
+build/test-android-root-shim: tests/android-root-shim.c \
+		src/android_root_shim.c include/tgcompat/android_root.h | build
+	$(GLIBC_CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 \
+		tests/android-root-shim.c src/android_root_shim.c -ldl -o $@
 
 build/test-exec-shim-driver: tests/exec-shim-driver.c | build
 	$(GLIBC_CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -std=c11 $< -o $@
@@ -143,9 +158,11 @@ release:
 	$(MAKE) CFLAGS="$(RELEASE_CFLAGS) $(RELEASE_CPU_FLAGS)" \
 		LDFLAGS="$(RELEASE_LDFLAGS)" build/tgcompatd \
 		build/libtgcompat-client.a build/libtgcompat-exec.so \
+		build/libtgcompat-android-root.so \
 		build/benchmark-broker-roundtrip
 	$(STRIP) --strip-unneeded build/tgcompatd \
-		build/libtgcompat-exec.so build/benchmark-broker-roundtrip
+		build/libtgcompat-exec.so build/libtgcompat-android-root.so \
+		build/benchmark-broker-roundtrip
 
 check: all check-exec-shim
 	./scripts/run-probes.sh --no-build
@@ -156,6 +173,7 @@ check: all check-exec-shim
 	./build/test-transport-security
 	./build/test-broker-integration
 	./build/test-client
+	./build/test-android-root-shim
 
 check-broker: $(TESTS)
 	./build/test-sem-store
