@@ -113,7 +113,10 @@ make "${make_args[@]}" release
 
 # This exercises optimized code in both the daemon and client instead of
 # accepting link success as proof that device-specific instructions execute.
-"$repo_dir/build/benchmark-broker-roundtrip" 100 >/dev/null
+(
+    cd "$repo_dir"
+    ./build/benchmark-broker-roundtrip 100 >/dev/null
+)
 
 if ((run_checks != 0)); then
     make -C "$repo_dir" -j"$jobs" clean
