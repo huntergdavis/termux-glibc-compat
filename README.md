@@ -59,6 +59,7 @@ The first milestone is checked in:
   plus a strict dispatcher exposing every completed state-core operation;
 - a runnable `tgcompatd` Unix-socket broker with mode-0700 runtime-directory
   validation, a mode-0600 socket, and same-UID `SO_PEERCRED` authentication;
+- concurrent client workers and broker-side FIFO `semop` wait/wakeup handling;
 - an evidence-backed compatibility matrix;
 - a no-ptrace architecture for a per-Termux-UID semaphore broker; and
 - a staged path from probes to a patched Termux glibc package and native Steam
@@ -69,8 +70,8 @@ shared memory pass; robust-list and SysV semaphore calls return `ENOSYS`. This
 confirms that semaphore compatibility is the first implementation target. See
 the [raw result](docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt).
 
-Blocking `semop` queues, glibc integration, and an on-tablet native client are
-the next implementation milestones. See
+Glibc integration, waiter-count controls, timed operations, and an on-tablet
+native client are the next implementation milestones. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Run the broker
@@ -92,11 +93,27 @@ On conventional Linux:
 
 ```sh
 make check
+make benchmark
 ```
 
 The runner reports `PASS`, `UNSUPPORTED`, or `FAIL`. `UNSUPPORTED` is a useful
 Android baseline, not a false pass. A broken implementation that advertises a
 feature but violates its semantics is `FAIL`.
+
+The benchmark excludes daemon startup and reuses one authenticated connection,
+matching the intended native-client hot path. It reports `PING` and `GETVAL`
+round-trip latency and throughput; tablet results, not workstation numbers,
+are the performance gate. Method and current measurements are in
+[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+
+For a stripped LTO build:
+
+```sh
+make release
+```
+
+On-device builds may add `RELEASE_CPU_FLAGS=-mcpu=native`; portable published
+binaries deliberately do not assume one ARM core design.
 
 On Termux, compile the probes with the same glibc toolchain used by the target
 runtime. Do not use the ordinary Bionic-linked `gcc` alias to infer glibc

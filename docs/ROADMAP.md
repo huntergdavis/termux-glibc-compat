@@ -15,7 +15,7 @@
 - [x] In-memory `GETVAL`, `GETALL`, `SETVAL`, and atomic `SETALL`
 - [x] Atomic in-memory `semop` evaluation and blocking/`IPC_NOWAIT` outcomes
 - [x] Expose the completed state-core operations through the broker dispatcher
-- [ ] Broker-side blocking queues and wakeups
+- [x] Broker-side blocking queues and wakeups
 - [ ] `GETPID`, `GETNCNT`, and `GETZCNT`
 - [ ] `semtimedop` using monotonic deadlines
 - [ ] `IPC_RMID` and disconnected-client cleanup

@@ -211,15 +211,15 @@ int tgc_transport_send(int socket_fd,
     if (socket_fd < 0 || packet == NULL) {
         return -EINVAL;
     }
-    uint8_t wire_header[TGC_PROTOCOL_HEADER_SIZE];
-    int result = tgc_protocol_encode_header(wire_header, &packet->header);
+    uint8_t wire[TGC_PROTOCOL_HEADER_SIZE + TGC_PROTOCOL_MAX_PAYLOAD];
+    int result = tgc_protocol_encode_header(wire, &packet->header);
     if (result != 0) {
         return result;
     }
-    result = send_exact(socket_fd, wire_header, sizeof(wire_header));
-    if (result != 0) {
-        return result;
+    if (packet->header.payload_length > 0) {
+        memcpy(wire + TGC_PROTOCOL_HEADER_SIZE, packet->payload,
+               packet->header.payload_length);
     }
-    return send_exact(socket_fd, packet->payload,
-                      packet->header.payload_length);
+    return send_exact(socket_fd, wire, TGC_PROTOCOL_HEADER_SIZE +
+                                           packet->header.payload_length);
 }

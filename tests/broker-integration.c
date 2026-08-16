@@ -5,6 +5,7 @@
 #include <tgcompat/transport.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -73,7 +74,9 @@ int main(void)
     char *created_directory = mkdtemp(directory);
     char socket_path[sizeof(directory) + 24];
     pid_t daemon_pid = -1;
+    pid_t waiter_pid = -1;
     int socket_fd = -1;
+    int ready_pipe[2] = {-1, -1};
     CHECK(created_directory != NULL);
     CHECK(snprintf(socket_path, sizeof(socket_path), "%s/broker.sock",
                    created_directory) > 0);
@@ -81,8 +84,8 @@ int main(void)
     daemon_pid = fork();
     CHECK(daemon_pid >= 0);
     if (daemon_pid == 0) {
-        execl("./build/tgcompatd", "tgcompatd", "--once", "--socket",
-              socket_path, (char *)NULL);
+        execl("./build/tgcompatd", "tgcompatd", "--socket", socket_path,
+              (char *)NULL);
         _exit(127);
     }
 
@@ -120,15 +123,89 @@ int main(void)
     CHECK(tgc_transport_receive(socket_fd, &response) == 0);
     CHECK(response.header.result == getpid());
 
+    /* Put the semaphore at zero, then prove another authenticated client can
+     * block in semop while this connection remains able to wake it. */
+    request_init(&request, TGC_OPCODE_SETVAL, 5, 12);
+    tgc_wire_put_i32(request.payload, semid);
+    tgc_wire_put_u32(request.payload + 4, 0);
+    tgc_wire_put_u32(request.payload + 8, 0);
+    CHECK(tgc_transport_send(socket_fd, &request) == 0);
+    CHECK(tgc_transport_receive(socket_fd, &response) == 0);
+    CHECK(response.header.result == 0);
+
+    CHECK(pipe2(ready_pipe, O_CLOEXEC) == 0);
+    waiter_pid = fork();
+    CHECK(waiter_pid >= 0);
+    if (waiter_pid == 0) {
+        (void)close(socket_fd);
+        (void)close(ready_pipe[0]);
+        (void)alarm(5);
+        int waiter_socket = connect_when_ready(socket_path);
+        if (waiter_socket < 0) {
+            _exit(10);
+        }
+        struct tgc_protocol_packet waiter_request;
+        struct tgc_protocol_packet waiter_response;
+        request_init(&waiter_request, TGC_OPCODE_SEMOP, 6, 16);
+        tgc_wire_put_i32(waiter_request.payload, semid);
+        tgc_wire_put_u32(waiter_request.payload + 4, 1);
+        tgc_wire_put_u16(waiter_request.payload + 8, 0);
+        tgc_wire_put_i16(waiter_request.payload + 10, -1);
+        tgc_wire_put_u16(waiter_request.payload + 12, 0);
+        tgc_wire_put_u16(waiter_request.payload + 14, 0);
+        if (tgc_transport_send(waiter_socket, &waiter_request) != 0 ||
+            write(ready_pipe[1], "R", 1) != 1 ||
+            tgc_transport_receive(waiter_socket, &waiter_response) != 0 ||
+            waiter_response.header.result != 0) {
+            _exit(11);
+        }
+        (void)close(waiter_socket);
+        (void)close(ready_pipe[1]);
+        _exit(0);
+    }
+    CHECK(close(ready_pipe[1]) == 0);
+    ready_pipe[1] = -1;
+    char ready_byte = '\0';
+    CHECK(read(ready_pipe[0], &ready_byte, 1) == 1 && ready_byte == 'R');
+    const struct timespec queue_pause = {.tv_sec = 0, .tv_nsec = 100000000L};
+    CHECK(nanosleep(&queue_pause, NULL) == 0);
+
+    request_init(&request, TGC_OPCODE_SETVAL, 7, 12);
+    tgc_wire_put_i32(request.payload, semid);
+    tgc_wire_put_u32(request.payload + 4, 0);
+    tgc_wire_put_u32(request.payload + 8, 1);
+    CHECK(tgc_transport_send(socket_fd, &request) == 0);
+    CHECK(tgc_transport_receive(socket_fd, &response) == 0);
+    CHECK(response.header.result == 0);
+
+    int waiter_status = 0;
+    CHECK(waitpid(waiter_pid, &waiter_status, 0) == waiter_pid);
+    waiter_pid = -1;
+    CHECK(WIFEXITED(waiter_status) && WEXITSTATUS(waiter_status) == 0);
+
+    request_init(&request, TGC_OPCODE_GETVAL, 8, 8);
+    tgc_wire_put_i32(request.payload, semid);
+    tgc_wire_put_u32(request.payload + 4, 0);
+    CHECK(tgc_transport_send(socket_fd, &request) == 0);
+    CHECK(tgc_transport_receive(socket_fd, &response) == 0);
+    CHECK(response.header.result == 0);
+
 done:
+    for (size_t i = 0; i < 2; ++i) {
+        if (ready_pipe[i] >= 0) {
+            (void)close(ready_pipe[i]);
+        }
+    }
+    if (waiter_pid > 0) {
+        (void)kill(waiter_pid, SIGKILL);
+        (void)waitpid(waiter_pid, NULL, 0);
+    }
     if (socket_fd >= 0) {
         (void)close(socket_fd);
     }
     if (daemon_pid > 0) {
         int status = 0;
-        if (socket_fd < 0) {
-            (void)kill(daemon_pid, SIGTERM);
-        }
+        (void)kill(daemon_pid, SIGTERM);
         if (waitpid(daemon_pid, &status, 0) != daemon_pid ||
             !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
             failed = 1;

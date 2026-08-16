@@ -74,6 +74,14 @@ effective UID with exact mode 0700, creates the socket with mode 0600, and
 never unlinks a pre-existing path during startup. A malformed or truncated
 frame closes only that client connection.
 
+Each authenticated connection has a bounded worker slot. State access stays
+behind one broker mutex, while blocked `semop` requests enter a FIFO queue per
+semaphore set and wait on a monotonic condition variable. `SETVAL`, `SETALL`,
+successful operations, and removal broadcast a state change. Only the first
+blocked request for a set retries, preserving queue order; unrelated sets can
+make progress concurrently. A timed peer check removes abandoned waiters when
+a client disconnects.
+
 ## Robust lists
 
 The current Termux glibc package removes NPTL robust-list registration and
