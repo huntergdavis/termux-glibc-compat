@@ -5,6 +5,7 @@
 #include <tgcompat/transport.h>
 
 #include <errno.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,10 +24,21 @@
         }                                                                       \
     } while (0)
 
+static void *create_thread_socketpair(void *argument)
+{
+    int *sockets = argument;
+    if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sockets) != 0) {
+        sockets[0] = -1;
+        sockets[1] = -1;
+    }
+    return NULL;
+}
+
 int main(void)
 {
     int failed = 0;
     int sockets[2] = {-1, -1};
+    int thread_sockets[2] = {-1, -1};
     CHECK(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sockets) == 0);
 
     pid_t peer_pid = 0;
@@ -39,6 +51,19 @@ int main(void)
           0);
     CHECK(credentials.pid == getpid() && credentials.uid == geteuid() &&
           credentials.gid == getegid());
+
+    pthread_t creator;
+    CHECK(pthread_create(&creator, NULL, create_thread_socketpair,
+                         thread_sockets) == 0);
+    CHECK(pthread_join(creator, NULL) == 0);
+    CHECK(thread_sockets[0] >= 0 && thread_sockets[1] >= 0);
+    CHECK(tgc_transport_get_credentials(thread_sockets[0], geteuid(),
+                                        &credentials) == 0);
+    CHECK(credentials.pid == getpid());
+    CHECK(close(thread_sockets[0]) == 0);
+    thread_sockets[0] = -1;
+    CHECK(close(thread_sockets[1]) == 0);
+    thread_sockets[1] = -1;
 
     struct tgc_protocol_packet sent;
     memset(&sent, 0, sizeof(sent));
@@ -64,6 +89,12 @@ int main(void)
     CHECK(tgc_transport_receive(sockets[1], &received) == TGC_TRANSPORT_EOF);
 
 done:
+    if (thread_sockets[0] >= 0) {
+        (void)close(thread_sockets[0]);
+    }
+    if (thread_sockets[1] >= 0) {
+        (void)close(thread_sockets[1]);
+    }
     if (sockets[0] >= 0) {
         (void)close(sockets[0]);
     }

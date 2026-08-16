@@ -210,6 +210,50 @@ int main(void)
         }
     }
 
+    pid_t undo_child = -1;
+    if (!failed) {
+        undo_child = fork();
+        if (undo_child == -1) {
+            perror("fork for SEM_UNDO");
+            failed = 1;
+        } else if (undo_child == 0) {
+            struct sembuf increment = {
+                .sem_num = 1,
+                .sem_op = 1,
+                .sem_flg = SEM_UNDO,
+            };
+            _exit(semop(semid, &increment, 1) == 0 ? 0 : 4);
+        }
+    }
+    if (!failed) {
+        int undo_status = 0;
+        int undo_wait = wait_for_child(undo_child, &undo_status);
+        if (undo_wait != 0 || !WIFEXITED(undo_status) ||
+            WEXITSTATUS(undo_status) != 0) {
+            fprintf(stderr, "SEM_UNDO child failed: status=%d\n", undo_status);
+            if (undo_wait != 0) {
+                (void)kill(undo_child, SIGKILL);
+                (void)waitpid(undo_child, &undo_status, 0);
+            }
+            failed = 1;
+        }
+    }
+    if (!failed) {
+        int restored_value = -1;
+        for (int i = 0; i < 200; ++i) {
+            restored_value = semctl(semid, 1, GETVAL);
+            if (restored_value == 1) {
+                break;
+            }
+            pause_milliseconds(10);
+        }
+        if (restored_value != 1) {
+            fprintf(stderr, "SEM_UNDO did not restore value: %d\n",
+                    restored_value);
+            failed = 1;
+        }
+    }
+
 cleanup:
     if (semctl(semid, 0, IPC_RMID) == -1) {
         perror("semctl(IPC_RMID)");

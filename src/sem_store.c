@@ -34,8 +34,17 @@ struct tgc_sem_set {
     uint32_t *zero_waiters;
 };
 
+struct tgc_undo_entry {
+    int32_t pid;
+    int semid;
+    int32_t adjustment;
+    uint16_t semnum;
+    bool active;
+};
+
 struct tgc_sem_store {
     struct tgc_sem_set sets[TGC_SEM_MAX_SETS];
+    struct tgc_undo_entry undo_entries[TGC_SEM_MAX_UNDO_ENTRIES];
 };
 
 static int make_id(size_t index, uint16_t generation)
@@ -85,6 +94,43 @@ static const struct tgc_sem_set *find_const_set(
 
     const struct tgc_sem_set *set = &store->sets[index];
     return set->active && set->generation == generation ? set : NULL;
+}
+
+static struct tgc_undo_entry *find_undo_entry(struct tgc_sem_store *store,
+                                               int32_t pid, int semid,
+                                               uint16_t semnum)
+{
+    for (size_t i = 0; i < TGC_SEM_MAX_UNDO_ENTRIES; ++i) {
+        struct tgc_undo_entry *entry = &store->undo_entries[i];
+        if (entry->active && entry->pid == pid && entry->semid == semid &&
+            entry->semnum == semnum) {
+            return entry;
+        }
+    }
+    return NULL;
+}
+
+static struct tgc_undo_entry *find_free_undo_entry(
+    struct tgc_sem_store *store)
+{
+    for (size_t i = 0; i < TGC_SEM_MAX_UNDO_ENTRIES; ++i) {
+        if (!store->undo_entries[i].active) {
+            return &store->undo_entries[i];
+        }
+    }
+    return NULL;
+}
+
+static void clear_undo_entries(struct tgc_sem_store *store, int semid,
+                               size_t semnum, bool all_semaphores)
+{
+    for (size_t i = 0; i < TGC_SEM_MAX_UNDO_ENTRIES; ++i) {
+        struct tgc_undo_entry *entry = &store->undo_entries[i];
+        if (entry->active && entry->semid == semid &&
+            (all_semaphores || entry->semnum == semnum)) {
+            entry->active = false;
+        }
+    }
 }
 
 static uint16_t next_generation(uint16_t generation)
@@ -205,6 +251,8 @@ int tgc_sem_store_remove(struct tgc_sem_store *store, int semid)
         return -EINVAL;
     }
 
+    clear_undo_entries(store, semid, 0, true);
+
     free(set->values);
     free(set->last_pids);
     free(set->negative_waiters);
@@ -247,6 +295,7 @@ int tgc_sem_store_setval(struct tgc_sem_store *store, int semid,
     if (value > TGC_SEM_MAX_VALUE) {
         return -ERANGE;
     }
+    clear_undo_entries(store, semid, semnum, false);
     set->values[semnum] = (uint16_t)value;
     set->last_pids[semnum] = pid;
     set->ctime = current_time_seconds();
@@ -286,6 +335,7 @@ int tgc_sem_store_setall(struct tgc_sem_store *store, int semid,
             return -ERANGE;
         }
     }
+    clear_undo_entries(store, semid, 0, true);
     memcpy(set->values, values, count * sizeof(*values));
     for (size_t i = 0; i < count; ++i) {
         set->last_pids[i] = pid;
@@ -415,6 +465,36 @@ int tgc_sem_store_info(const struct tgc_sem_store *store, int dynamic,
     return highest_index;
 }
 
+int tgc_sem_store_process_exit(struct tgc_sem_store *store, int32_t pid)
+{
+    if (store == NULL || pid <= 0) {
+        return -EINVAL;
+    }
+    int changed = 0;
+    for (size_t i = 0; i < TGC_SEM_MAX_UNDO_ENTRIES; ++i) {
+        struct tgc_undo_entry *entry = &store->undo_entries[i];
+        if (!entry->active || entry->pid != pid) {
+            continue;
+        }
+        struct tgc_sem_set *set = find_set(store, entry->semid);
+        if (set != NULL && entry->semnum < set->nsems) {
+            int64_t value = (int64_t)set->values[entry->semnum] +
+                            entry->adjustment;
+            if (value < 0) {
+                value = 0;
+            } else if (value > TGC_SEM_MAX_VALUE) {
+                value = TGC_SEM_MAX_VALUE;
+            }
+            set->values[entry->semnum] = (uint16_t)value;
+            set->last_pids[entry->semnum] = pid;
+            set->otime = current_time_seconds();
+            changed = 1;
+        }
+        entry->active = false;
+    }
+    return changed;
+}
+
 int tgc_sem_store_tryop(struct tgc_sem_store *store, int semid,
                         const struct tgc_sem_op *operations, size_t count,
                         int32_t pid)
@@ -438,9 +518,6 @@ int tgc_sem_store_tryop_detail(struct tgc_sem_store *store, int semid,
         if (operations[i].sem_num >= set->nsems ||
             (operations[i].sem_flg & ~allowed_flags) != 0) {
             return -EINVAL;
-        }
-        if ((operations[i].sem_flg & TGC_SEM_UNDO) != 0) {
-            return -ENOTSUP;
         }
     }
 
@@ -481,9 +558,73 @@ int tgc_sem_store_tryop_detail(struct tgc_sem_store *store, int semid,
         }
     }
 
+    int32_t undo_deltas[TGC_SEM_MAX_PER_SET] = {0};
+    for (size_t i = 0; i < count; ++i) {
+        if ((operations[i].sem_flg & TGC_SEM_UNDO) == 0) {
+            continue;
+        }
+        size_t semnum = operations[i].sem_num;
+        int64_t delta = (int64_t)undo_deltas[semnum] - operations[i].sem_op;
+        if (delta < -(int64_t)TGC_SEM_MAX_VALUE - 1 ||
+            delta > TGC_SEM_MAX_VALUE) {
+            return -ERANGE;
+        }
+        undo_deltas[semnum] = (int32_t)delta;
+    }
+
+    size_t free_entries = 0;
+    for (size_t i = 0; i < TGC_SEM_MAX_UNDO_ENTRIES; ++i) {
+        free_entries += store->undo_entries[i].active ? 0U : 1U;
+    }
+    size_t required_entries = 0;
+    for (size_t semnum = 0; semnum < set->nsems; ++semnum) {
+        if (undo_deltas[semnum] == 0) {
+            continue;
+        }
+        struct tgc_undo_entry *entry = find_undo_entry(
+            store, pid, semid, (uint16_t)semnum);
+        int64_t adjustment = undo_deltas[semnum];
+        if (entry != NULL) {
+            adjustment += entry->adjustment;
+        } else if (adjustment != 0) {
+            required_entries += 1;
+        }
+        if (adjustment < -(int64_t)TGC_SEM_MAX_VALUE - 1 ||
+            adjustment > TGC_SEM_MAX_VALUE) {
+            return -ERANGE;
+        }
+    }
+    if (required_entries > free_entries) {
+        return -ENOSPC;
+    }
+
     memcpy(set->values, working, set->nsems * sizeof(*working));
     for (size_t i = 0; i < count; ++i) {
         set->last_pids[operations[i].sem_num] = pid;
+    }
+    for (size_t semnum = 0; semnum < set->nsems; ++semnum) {
+        if (undo_deltas[semnum] == 0) {
+            continue;
+        }
+        struct tgc_undo_entry *entry = find_undo_entry(
+            store, pid, semid, (uint16_t)semnum);
+        if (entry == NULL) {
+            entry = find_free_undo_entry(store);
+            if (entry == NULL) {
+                return -ENOSPC;
+            }
+            *entry = (struct tgc_undo_entry){
+                .pid = pid,
+                .semid = semid,
+                .adjustment = 0,
+                .semnum = (uint16_t)semnum,
+                .active = true,
+            };
+        }
+        entry->adjustment += undo_deltas[semnum];
+        if (entry->adjustment == 0) {
+            entry->active = false;
+        }
     }
     set->otime = current_time_seconds();
     return 0;

@@ -75,7 +75,8 @@ build/test-broker-dispatch: tests/broker-dispatch.c $(CORE_OBJECTS) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 $^ $(LDFLAGS) -o $@
 
 build/test-transport: tests/transport.c build/protocol.o build/transport.o | build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 $^ $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 \
+		$(THREAD_FLAGS) $^ $(LDFLAGS) -o $@
 
 build/test-transport-security: tests/transport-security.c build/protocol.o \
 		build/transport.o | build

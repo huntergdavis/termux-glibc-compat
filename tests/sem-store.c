@@ -131,16 +131,49 @@ int main(void)
     CHECK(tgc_sem_store_getval(store, keyed, 1) == 1);
 
     struct tgc_sem_op undo = {
-        .sem_num = 0, .sem_op = 1, .sem_flg = TGC_SEM_UNDO,
+        .sem_num = 0, .sem_op = -1, .sem_flg = TGC_SEM_UNDO,
     };
-    CHECK(tgc_sem_store_tryop(store, keyed, &undo, 1, 1101) == -ENOTSUP);
+    CHECK(tgc_sem_store_setval(store, keyed, 0, 1, 1100) == 0);
+    CHECK(tgc_sem_store_tryop(store, keyed, &undo, 1, 1101) == 0);
+    CHECK(tgc_sem_store_getval(store, keyed, 0) == 0);
+    CHECK(tgc_sem_store_process_exit(store, 1101) == 1);
+    CHECK(tgc_sem_store_getval(store, keyed, 0) == 1);
+    CHECK(tgc_sem_store_getpid(store, keyed, 0) == 1101);
+    CHECK(tgc_sem_store_process_exit(store, 1101) == 0);
+
+    undo.sem_op = 1;
+    CHECK(tgc_sem_store_tryop(store, keyed, &undo, 1, 1102) == 0);
+    undo.sem_op = -1;
+    CHECK(tgc_sem_store_tryop(store, keyed, &undo, 1, 1102) == 0);
+    CHECK(tgc_sem_store_process_exit(store, 1102) == 0);
+    CHECK(tgc_sem_store_getval(store, keyed, 0) == 1);
+
+    struct tgc_sem_op minimum_undo[3] = {
+        {.sem_num = 0, .sem_op = TGC_SEM_MAX_VALUE,
+         .sem_flg = TGC_SEM_UNDO},
+        {.sem_num = 0, .sem_op = -TGC_SEM_MAX_VALUE, .sem_flg = 0},
+        {.sem_num = 0, .sem_op = 1, .sem_flg = TGC_SEM_UNDO},
+    };
+    CHECK(tgc_sem_store_setval(store, keyed, 0, 0, 1104) == 0);
+    CHECK(tgc_sem_store_tryop(store, keyed, minimum_undo, 3, 1105) == 0);
+    CHECK(tgc_sem_store_getval(store, keyed, 0) == 1);
+    CHECK(tgc_sem_store_process_exit(store, 1105) == 1);
+    CHECK(tgc_sem_store_getval(store, keyed, 0) == 0);
+
+    CHECK(tgc_sem_store_setval(store, keyed, 0, 1, 1104) == 0);
+    CHECK(tgc_sem_store_tryop(store, keyed, &undo, 1, 1103) == 0);
+    CHECK(tgc_sem_store_setval(store, keyed, 0, 3, 1104) == 0);
+    CHECK(tgc_sem_store_process_exit(store, 1103) == 0);
+    CHECK(tgc_sem_store_getval(store, keyed, 0) == 3);
+    CHECK(tgc_sem_store_process_exit(NULL, 1) == -EINVAL);
+    CHECK(tgc_sem_store_process_exit(store, 0) == -EINVAL);
     struct tgc_sem_op invalid_sem = {
         .sem_num = 2, .sem_op = 1, .sem_flg = 0,
     };
-    CHECK(tgc_sem_store_tryop(store, keyed, &invalid_sem, 1, 1102) ==
+    CHECK(tgc_sem_store_tryop(store, keyed, &invalid_sem, 1, 1110) ==
           -EINVAL);
-    CHECK(tgc_sem_store_tryop(store, keyed, NULL, 1, 1103) == -EINVAL);
-    CHECK(tgc_sem_store_tryop(store, keyed, &undo, 0, 1104) == -EINVAL);
+    CHECK(tgc_sem_store_tryop(store, keyed, NULL, 1, 1111) == -EINVAL);
+    CHECK(tgc_sem_store_tryop(store, keyed, &undo, 0, 1112) == -EINVAL);
 
     CHECK(tgc_sem_store_remove(store, keyed) == 0);
     CHECK(tgc_sem_store_stat_index(store, 0, &indexed_metadata) == -EINVAL);

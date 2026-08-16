@@ -64,6 +64,8 @@ The first milestone is checked in:
 - ownership/mode/timestamp metadata, `GETNCNT`/`GETZCNT`, `IPC_INFO`,
   `SEM_INFO`, indexed `SEM_STAT`/`SEM_STAT_ANY`, and monotonic `semtimedop`
   deadlines;
+- Linux-compatible per-process `SEM_UNDO` accounting, including process-exit
+  restoration observed with `pidfd_open` and a `/proc` fallback;
 - a lazy, persistent, per-thread native client API that reconnects safely after
   `fork`, closes its connection at thread exit, and never allocates or
   reconnects in steady-state calls;
@@ -81,9 +83,9 @@ shared memory pass; robust-list and SysV semaphore calls return `ENOSYS`. This
 confirms that semaphore compatibility is the first implementation target. See
 the [raw result](docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt).
 
-`SEM_UNDO`, a safe isolated tablet package test, and the first native Steam
-client launch are the next implementation milestones. The integration overlay
-and its exact upstream pin are documented in
+A safe isolated tablet package test and the first native Steam client launch
+are the next implementation milestones. The integration overlay and its exact
+upstream pin are documented in
 [`integration/termux-glibc/README.md`](integration/termux-glibc/README.md).
 See also [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
@@ -118,6 +120,12 @@ matching the intended native-client hot path. It reports `PING` and `GETVAL`
 round-trip latency and throughput; tablet results, not workstation numbers,
 are the performance gate. Method and current measurements are in
 [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+
+`SEM_UNDO` behavior follows the upstream Linux implementation, including its
+`-32768..32767` accumulated adjustment range and clearing adjustments after
+`SETVAL`, `SETALL`, or removal. The broker tracks one authenticated process,
+not one client thread, so all connections from the same process share the undo
+list just as Linux threads using `CLONE_SYSVSEM` do.
 
 For a stripped LTO build:
 

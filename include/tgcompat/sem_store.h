@@ -13,6 +13,7 @@ enum {
     TGC_SEM_MAX_SETS = 128,
     TGC_SEM_MAX_PER_SET = 512,
     TGC_SEM_MAX_VALUE = 32767,
+    TGC_SEM_MAX_UNDO_ENTRIES = 4096,
     TGC_SEM_OP_BLOCKED = 1,
 };
 
@@ -98,12 +99,13 @@ int tgc_sem_store_adjust_wait_count(struct tgc_sem_store *store, int semid,
                                     int adjustment);
 int tgc_sem_store_info(const struct tgc_sem_store *store, int dynamic,
                        struct tgc_sem_info *info);
+int tgc_sem_store_process_exit(struct tgc_sem_store *store, int32_t pid);
 
 /*
  * Applies every operation atomically. TGC_SEM_OP_BLOCKED means the caller may
  * queue the unchanged operation and retry it after a state change. A blocked
- * operation carrying TGC_IPC_NOWAIT returns -EAGAIN instead. SEM_UNDO is
- * rejected with -ENOTSUP until per-process undo tracking is implemented.
+ * operation carrying TGC_IPC_NOWAIT returns -EAGAIN instead. Successful
+ * SEM_UNDO adjustments are retained until tgc_sem_store_process_exit.
  */
 int tgc_sem_store_tryop(struct tgc_sem_store *store, int semid,
                         const struct tgc_sem_op *operations, size_t count,

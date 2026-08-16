@@ -15,9 +15,9 @@ following operations route to the same-UID broker:
 - `GETVAL`, `SETVAL`, `GETPID`, `GETNCNT`, and `GETZCNT`; and
 - `GETALL` and `SETALL`.
 
-Process-exit `SEM_UNDO` restoration remains explicitly unsupported. Ordinary
-calls without `SEM_UNDO` are complete and
-blocking/timed waits use one monotonic deadline in the broker.
+`SEM_UNDO` is complete, including atomic per-process adjustment accounting,
+Linux-compatible bounds and clearing rules, and process-exit restoration.
+Blocking/timed waits use one monotonic deadline in the broker.
 
 ## Apply
 
@@ -50,7 +50,8 @@ against glibc 2.44 as both static and shared sysvipc objects. A complete
 `libc.so` link then succeeded. The repository's public Linux semaphore probe
 was run through that new loader against `tgcompatd`; it passed `IPC_STAT`,
 `IPC_SET`, `IPC_INFO`, `SEM_STAT_ANY`, `GETALL`, `SETALL`, `GETPID`, `GETNCNT`,
-a timed `EAGAIN`, and cross-process blocking/wakeup behavior.
+a timed `EAGAIN`, cross-process blocking/wakeup behavior, and `SEM_UNDO`
+restoration after a child exits.
 
 The persistent connection is one socket per calling thread so a blocking
 `semop` cannot deadlock unrelated semaphore calls. A pthread-key destructor

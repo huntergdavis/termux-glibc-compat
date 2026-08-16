@@ -43,12 +43,16 @@ The broker owns:
 - FIFO blocking queues, `IPC_NOWAIT`, and monotonic timeouts;
 - waiter counts and wakeups after every state change;
 - `IPC_RMID` invalidation and wakeup behavior; and
-- later, per-process `SEM_UNDO` accounting.
+- per-process `SEM_UNDO` accounting and process-exit restoration.
 
 Blocking clients keep their connection open. Peer closure lets the broker
-remove pending requests and later apply `SEM_UNDO`. This is intentionally
-simpler to audit than a shared-memory lock whose owner can disappear without
-kernel robust-list cleanup.
+remove pending requests. Undo state is keyed by the authenticated process ID,
+shared by all that process's client threads, and survives an individual thread
+or connection closing. A small monitor uses `pidfd_open` where available and a
+PID-plus-`/proc`-inode fallback otherwise; once the process exits it applies
+and clears all pending adjustments under the broker state lock, then wakes
+waiters. This follows Linux process semantics without polling every active
+client socket or putting a tracer in the application hot path.
 
 ### Version 1 wire boundary
 
@@ -75,6 +79,12 @@ overlong socket paths, requires the containing directory to be owned by its
 effective UID with exact mode 0700, creates the socket with mode 0600, and
 never unlinks a pre-existing path during startup. A malformed or truncated
 frame closes only that client connection.
+
+Successful `SEM_UNDO` operations atomically update a bounded per-process undo
+table. Accumulated adjustments use Linux's `-32768..32767` bounds. `SETVAL`
+clears undo state for that semaphore; `SETALL` and `IPC_RMID` clear it for the
+whole set. Process-exit restoration clamps values to the Linux semaphore value
+range, updates `GETPID`/operation time, and broadcasts the resulting change.
 
 Each authenticated connection has a bounded worker slot. State access stays
 behind one broker mutex, while blocked `semop` requests enter a FIFO queue per

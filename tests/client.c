@@ -134,6 +134,35 @@ int main(void)
     CHECK(tgc_client_getpid(&client, semid, 1) == child_pid);
     child_pid = -1;
 
+    CHECK(tgc_client_setval(&client, semid, 0, 0) == 0);
+    child_pid = fork();
+    CHECK(child_pid >= 0);
+    if (child_pid == 0) {
+        const struct tgc_sem_op undo_increment = {
+            .sem_num = 0,
+            .sem_op = 1,
+            .sem_flg = TGC_SEM_UNDO,
+        };
+        int result = tgc_client_semop(&client, semid, &undo_increment, 1);
+        if (result != 0 || tgc_client_getval(&client, semid, 0) != 1) {
+            _exit(21);
+        }
+        _exit(0);
+    }
+    CHECK(waitpid(child_pid, &child_status, 0) == child_pid);
+    CHECK(WIFEXITED(child_status) && WEXITSTATUS(child_status) == 0);
+    child_pid = -1;
+    int restored_value = -1;
+    for (int attempt = 0; attempt < 200; ++attempt) {
+        restored_value = tgc_client_getval(&client, semid, 0);
+        if (restored_value == 0) {
+            break;
+        }
+        const struct timespec pause = {.tv_sec = 0, .tv_nsec = 10000000L};
+        (void)nanosleep(&pause, NULL);
+    }
+    CHECK(restored_value == 0);
+
     CHECK(tgc_client_remove(&client, semid) == 0);
     CHECK(tgc_client_getval(&client, semid, 0) == -EINVAL);
 

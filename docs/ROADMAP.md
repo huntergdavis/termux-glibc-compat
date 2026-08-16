@@ -21,7 +21,7 @@
 - [x] Linux `SEM_STAT` and `SEM_STAT_ANY` indexed lookup
 - [x] `semtimedop` using monotonic deadlines
 - [x] `IPC_RMID` and disconnected-waiter cleanup
-- [ ] `SEM_UNDO` process-exit behavior
+- [x] `SEM_UNDO` process-exit behavior
 
 ## Milestone 2: Termux glibc integration
 
