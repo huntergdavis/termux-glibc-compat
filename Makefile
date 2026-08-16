@@ -6,6 +6,8 @@ LDFLAGS ?=
 STRIP ?= strip
 PROBE_SHM_LIBS ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),\
 	-landroid-shmem,)
+PROBE_SEM_LIBS ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),\
+	-landroid-sysv-semaphore,)
 
 RELEASE_CFLAGS ?= -O3 -DNDEBUG -flto -fno-plt \
 	-fno-semantic-interposition -fomit-frame-pointer \
@@ -39,6 +41,10 @@ build/%: probes/%.c | build
 build/sysv-shm: probes/sysv-shm.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 -pthread \
 		$< $(LDFLAGS) $(PROBE_SHM_LIBS) -o $@
+
+build/sysv-semaphore: probes/sysv-semaphore.c | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 -pthread \
+		$< $(LDFLAGS) $(PROBE_SEM_LIBS) -o $@
 
 build/sem_store.o: src/sem_store.c include/tgcompat/sem_store.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 -c $< -o $@
