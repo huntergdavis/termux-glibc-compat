@@ -13,8 +13,9 @@
 - [ ] Same-UID broker startup and peer validation
 - [x] In-memory `semget`, key lookup, and generation-safe IDs
 - [x] In-memory `GETVAL`, `GETALL`, `SETVAL`, and atomic `SETALL`
+- [x] Atomic in-memory `semop` evaluation and blocking/`IPC_NOWAIT` outcomes
 - [ ] Expose the completed state-core operations through the broker
-- [ ] Atomic `semop`, blocking waiters, `IPC_NOWAIT`, and wakeups
+- [ ] Broker-side blocking queues and wakeups
 - [ ] `GETPID`, `GETNCNT`, and `GETZCNT`
 - [ ] `semtimedop` using monotonic deadlines
 - [ ] `IPC_RMID` and disconnected-client cleanup

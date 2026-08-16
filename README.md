@@ -53,7 +53,8 @@ The first milestone is checked in:
 - strict C probes for pthread creation, robust-list behavior, SysV semaphore
   wakeups, and cross-process SysV shared memory;
 - a tested in-memory semaphore-set core with generation-safe IDs, Linux-like
-  key lookup, and atomic `SETALL` validation;
+  key lookup, atomic `SETALL` validation, and all-or-nothing multi-operation
+  evaluation;
 - an evidence-backed compatibility matrix;
 - a no-ptrace architecture for a per-Termux-UID semaphore broker; and
 - a staged path from probes to a patched Termux glibc package and native Steam

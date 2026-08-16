@@ -237,3 +237,63 @@ int tgc_sem_store_setall(struct tgc_sem_store *store, int semid,
     }
     return 0;
 }
+
+int tgc_sem_store_tryop(struct tgc_sem_store *store, int semid,
+                        const struct tgc_sem_op *operations, size_t count,
+                        int32_t pid)
+{
+    struct tgc_sem_set *set = find_set(store, semid);
+    if (set == NULL || operations == NULL || count == 0) {
+        return -EINVAL;
+    }
+
+    const unsigned int allowed_flags = TGC_IPC_NOWAIT | TGC_SEM_UNDO;
+    for (size_t i = 0; i < count; ++i) {
+        if (operations[i].sem_num >= set->nsems ||
+            (operations[i].sem_flg & ~allowed_flags) != 0) {
+            return -EINVAL;
+        }
+        if ((operations[i].sem_flg & TGC_SEM_UNDO) != 0) {
+            return -ENOTSUP;
+        }
+    }
+
+    uint16_t working[TGC_SEM_MAX_PER_SET];
+    memcpy(working, set->values, set->nsems * sizeof(*working));
+
+    for (size_t i = 0; i < count; ++i) {
+        const struct tgc_sem_op *operation = &operations[i];
+        uint16_t *value = &working[operation->sem_num];
+        bool blocked = false;
+
+        if (operation->sem_op > 0) {
+            unsigned int result = (unsigned int)*value +
+                                  (unsigned int)operation->sem_op;
+            if (result > TGC_SEM_MAX_VALUE) {
+                return -ERANGE;
+            }
+            *value = (uint16_t)result;
+        } else if (operation->sem_op < 0) {
+            unsigned int amount = (unsigned int)-(int)operation->sem_op;
+            if (*value < amount) {
+                blocked = true;
+            } else {
+                *value = (uint16_t)(*value - amount);
+            }
+        } else if (*value != 0) {
+            blocked = true;
+        }
+
+        if (blocked) {
+            return (operation->sem_flg & TGC_IPC_NOWAIT) != 0
+                       ? -EAGAIN
+                       : TGC_SEM_OP_BLOCKED;
+        }
+    }
+
+    memcpy(set->values, working, set->nsems * sizeof(*working));
+    for (size_t i = 0; i < count; ++i) {
+        set->last_pids[operations[i].sem_num] = pid;
+    }
+    return 0;
+}
