@@ -19,6 +19,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "temp-path.h"
+
 #define CHECK(expression)                                                       \
     do {                                                                        \
         if (!(expression)) {                                                    \
@@ -70,13 +72,16 @@ static int connect_when_ready(const char *socket_path)
 int main(void)
 {
     int failed = 0;
-    char directory[] = "/tmp/tgcompat-integration.XXXXXX";
-    char *created_directory = mkdtemp(directory);
+    char directory[TGC_TEST_PATH_CAPACITY];
+    char *created_directory = NULL;
     char socket_path[sizeof(directory) + 24];
     pid_t daemon_pid = -1;
     pid_t waiter_pid = -1;
     int socket_fd = -1;
     int ready_pipe[2] = {-1, -1};
+    CHECK(tgc_test_temp_template(directory, sizeof(directory),
+                                 "tgcompat-integration") == 0);
+    created_directory = mkdtemp(directory);
     CHECK(created_directory != NULL);
     CHECK(snprintf(socket_path, sizeof(socket_path), "%s/broker.sock",
                    created_directory) > 0);

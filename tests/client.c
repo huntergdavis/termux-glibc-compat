@@ -12,6 +12,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "temp-path.h"
+
 #define CHECK(expression)                                                       \
     do {                                                                        \
         if (!(expression)) {                                                    \
@@ -41,13 +43,16 @@ static int wait_for_broker(struct tgc_client *client)
 int main(void)
 {
     int failed = 0;
-    char directory[] = "/tmp/tgcompat-client.XXXXXX";
-    char *created_directory = mkdtemp(directory);
+    char directory[TGC_TEST_PATH_CAPACITY];
+    char *created_directory = NULL;
     char socket_path[sizeof(directory) + 24];
     pid_t daemon_pid = -1;
     pid_t child_pid = -1;
     struct tgc_client client;
     int client_initialized = 0;
+    CHECK(tgc_test_temp_template(directory, sizeof(directory),
+                                 "tgcompat-client") == 0);
+    created_directory = mkdtemp(directory);
     CHECK(created_directory != NULL);
     int written = snprintf(socket_path, sizeof(socket_path), "%s/broker.sock",
                            created_directory);

@@ -18,6 +18,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../tests/temp-path.h"
+
 static void request_init(struct tgc_protocol_packet *request, uint16_t opcode,
                          uint32_t payload_length)
 {
@@ -196,13 +198,17 @@ int main(int argc, char **argv)
     }
 
     int failed = 0;
-    char directory[] = "/tmp/tgcompat-benchmark.XXXXXX";
-    char *created_directory = mkdtemp(directory);
+    char directory[TGC_TEST_PATH_CAPACITY];
+    char *created_directory = NULL;
     char socket_path[sizeof(directory) + 24];
     pid_t daemon_pid = -1;
     int socket_fd = -1;
     struct tgc_client client;
     int client_initialized = 0;
+    if (tgc_test_temp_template(directory, sizeof(directory),
+                               "tgcompat-benchmark") == 0) {
+        created_directory = mkdtemp(directory);
+    }
     if (created_directory == NULL ||
         snprintf(socket_path, sizeof(socket_path), "%s/broker.sock",
                  created_directory) <= 0) {
