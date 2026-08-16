@@ -9,12 +9,12 @@
 
 ## Milestone 1: semaphore protocol
 
-- [ ] Versioned request/response definitions
+- [x] Versioned request/response definitions
 - [ ] Same-UID broker startup and peer validation
 - [x] In-memory `semget`, key lookup, and generation-safe IDs
 - [x] In-memory `GETVAL`, `GETALL`, `SETVAL`, and atomic `SETALL`
 - [x] Atomic in-memory `semop` evaluation and blocking/`IPC_NOWAIT` outcomes
-- [ ] Expose the completed state-core operations through the broker
+- [x] Expose the completed state-core operations through the broker dispatcher
 - [ ] Broker-side blocking queues and wakeups
 - [ ] `GETPID`, `GETNCNT`, and `GETZCNT`
 - [ ] `semtimedop` using monotonic deadlines

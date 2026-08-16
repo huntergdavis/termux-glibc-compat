@@ -55,6 +55,8 @@ The first milestone is checked in:
 - a tested in-memory semaphore-set core with generation-safe IDs, Linux-like
   key lookup, atomic `SETALL` validation, and all-or-nothing multi-operation
   evaluation;
+- a version-1, explicitly little-endian and bounded request/response protocol,
+  plus a strict dispatcher exposing every completed state-core operation;
 - an evidence-backed compatibility matrix;
 - a no-ptrace architecture for a per-Termux-UID semaphore broker; and
 - a staged path from probes to a patched Termux glibc package and native Steam
@@ -65,8 +67,8 @@ shared memory pass; robust-list and SysV semaphore calls return `ENOSYS`. This
 confirms that semaphore compatibility is the first implementation target. See
 the [raw result](docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt).
 
-Broker transport, blocking `semop`, and glibc integration are the next
-implementation milestone. See
+The same-UID Unix socket transport, blocking `semop`, and glibc integration are
+the next implementation milestone. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Run the probes

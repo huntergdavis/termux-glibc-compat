@@ -50,6 +50,23 @@ remove pending requests and later apply `SEM_UNDO`. This is intentionally
 simpler to audit than a shared-memory lock whose owner can disappear without
 kernel robust-list cleanup.
 
+### Version 1 wire boundary
+
+The checked-in protocol uses a fixed 24-byte, explicitly little-endian header:
+magic, version, request/response kind, opcode, zeroed reserved field, request
+ID, bounded payload length, and a signed result. Requests require a zero result;
+responses carry either the state-core return value or a negative errno. The
+maximum payload is 8192 bytes, enough for the bounded 512-entry `SETALL` and
+`SEMOP` messages without unbounded allocation.
+
+Version 1 exposes ping, `semget`, removal, `GETVAL`, `SETVAL`, `GETPID`,
+`GETALL`, `SETALL`, and atomic `semop` evaluation. Integer encoding is manual
+rather than a cast of C structures, so compiler padding and host alignment are
+not protocol state. Every variable array includes a count and must match the
+header length exactly; operation records include a reserved field that must be
+zero. The dispatcher is independent of Unix sockets so malformed payloads are
+covered by ordinary unit tests before transport or concurrency is involved.
+
 ## Robust lists
 
 The current Termux glibc package removes NPTL robust-list registration and
