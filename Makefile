@@ -4,6 +4,8 @@ CFLAGS ?= -O2 -g
 CPPFLAGS ?=
 LDFLAGS ?=
 STRIP ?= strip
+PROBE_SHM_LIBS ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),\
+	-landroid-shmem,)
 
 RELEASE_CFLAGS ?= -O3 -DNDEBUG -flto -fno-plt \
 	-fno-semantic-interposition -fomit-frame-pointer \
@@ -24,7 +26,7 @@ TESTS := build/test-sem-store build/test-protocol build/test-broker-dispatch \
 	build/test-transport build/test-transport-security \
 	build/test-broker-integration build/test-client
 
-.PHONY: all benchmark check clean release
+.PHONY: all benchmark check check-broker clean release
 
 all: $(PROBES) build/tgcompatd build/libtgcompat-client.a $(TESTS)
 
@@ -33,6 +35,10 @@ build:
 
 build/%: probes/%.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 -pthread $< $(LDFLAGS) -o $@
+
+build/sysv-shm: probes/sysv-shm.c | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 -pthread \
+		$< $(LDFLAGS) $(PROBE_SHM_LIBS) -o $@
 
 build/sem_store.o: src/sem_store.c include/tgcompat/sem_store.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 -c $< -o $@
@@ -111,6 +117,15 @@ release:
 
 check: all
 	./scripts/run-probes.sh --no-build
+	./build/test-sem-store
+	./build/test-protocol
+	./build/test-broker-dispatch
+	./build/test-transport
+	./build/test-transport-security
+	./build/test-broker-integration
+	./build/test-client
+
+check-broker: $(TESTS)
 	./build/test-sem-store
 	./build/test-protocol
 	./build/test-broker-dispatch

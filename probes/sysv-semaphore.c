@@ -12,12 +12,14 @@
 
 enum { EXIT_UNSUPPORTED = 77 };
 
+#ifdef _SEM_SEMUN_UNDEFINED
 union semun {
     int val;
     struct semid_ds *buf;
     unsigned short *array;
     struct seminfo *__buf;
 };
+#endif
 
 static void pause_milliseconds(long milliseconds)
 {

@@ -111,6 +111,12 @@ make check
 make benchmark
 ```
 
+On Bionic/Android, `make check-broker` runs the complete broker, protocol,
+transport, client, fork, timeout, and `SEM_UNDO` suite without conflating those
+results with the separate host-libc capability probes. `make check` also works
+when Termux's `libandroid-shmem` development package is installed; the build
+selects that link shim automatically.
+
 The runner reports `PASS`, `UNSUPPORTED`, or `FAIL`. `UNSUPPORTED` is a useful
 Android baseline, not a false pass. A broken implementation that advertises a
 feature but violates its semantics is `FAIL`.
