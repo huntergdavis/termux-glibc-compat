@@ -4,8 +4,9 @@ Focused Linux compatibility for running glibc applications natively inside an
 unrooted Termux app sandbox—without putting every syscall through PRoot's
 `ptrace` tracer.
 
-This is an early research and implementation project. It does **not** yet run
-Steam or Proton without PRoot.
+This is an early research and implementation project. The native glibc patch
+is host-validated, but it does **not** yet run Steam or Proton without PRoot on
+the tablet.
 
 ## Why this exists
 
@@ -61,9 +62,15 @@ The first milestone is checked in:
   validation, a mode-0600 socket, and same-UID `SO_PEERCRED` authentication;
 - concurrent client workers and broker-side FIFO `semop` wait/wakeup handling;
 - ownership/mode/timestamp metadata, `GETNCNT`/`GETZCNT`, `IPC_INFO`,
-  `SEM_INFO`, and monotonic `semtimedop` deadlines;
+  `SEM_INFO`, indexed `SEM_STAT`/`SEM_STAT_ANY`, and monotonic `semtimedop`
+  deadlines;
 - a lazy, persistent, per-thread native client API that reconnects safely after
-  `fork` and never allocates or reconnects in steady-state calls;
+  `fork`, closes its connection at thread exit, and never allocates or
+  reconnects in steady-state calls;
+- a pinned Termux glibc 2.44 package overlay that preserves public symbol and
+  time ABIs while replacing only the semaphore syscall boundary;
+- a successful real `libc.so` link and public-API probe through that built
+  loader against `tgcompatd`;
 - an evidence-backed compatibility matrix;
 - a no-ptrace architecture for a per-Termux-UID semaphore broker; and
 - a staged path from probes to a patched Termux glibc package and native Steam
@@ -74,9 +81,11 @@ shared memory pass; robust-list and SysV semaphore calls return `ENOSYS`. This
 confirms that semaphore compatibility is the first implementation target. See
 the [raw result](docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt).
 
-Glibc integration, `SEM_UNDO`, and an on-tablet native client are the next
-implementation milestones. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md).
+`SEM_UNDO`, a safe isolated tablet package test, and the first native Steam
+client launch are the next implementation milestones. The integration overlay
+and its exact upstream pin are documented in
+[`integration/termux-glibc/README.md`](integration/termux-glibc/README.md).
+See also [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Run the broker
 

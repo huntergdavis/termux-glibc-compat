@@ -274,6 +274,34 @@ int tgc_client_semtimedop(struct tgc_client *client, int semid,
                       timeout_nanoseconds);
 }
 
+static int decode_metadata_response(
+    struct tgc_client *client, const struct tgc_protocol_packet *response,
+    struct tgc_sem_metadata *metadata)
+{
+    if (response->header.result < 0) {
+        return response->header.result;
+    }
+    if (response->header.payload_length != 56 ||
+        tgc_wire_get_u32(response->payload + 28) != 0 ||
+        tgc_wire_get_u32(response->payload + 52) != 0) {
+        tgc_client_close(client);
+        return -EPROTO;
+    }
+    *metadata = (struct tgc_sem_metadata){
+        .key = tgc_wire_get_i32(response->payload),
+        .uid = tgc_wire_get_u32(response->payload + 4),
+        .gid = tgc_wire_get_u32(response->payload + 8),
+        .cuid = tgc_wire_get_u32(response->payload + 12),
+        .cgid = tgc_wire_get_u32(response->payload + 16),
+        .mode = tgc_wire_get_u32(response->payload + 20),
+        .nsems = tgc_wire_get_u32(response->payload + 24),
+        .otime = tgc_wire_get_i64(response->payload + 32),
+        .ctime = tgc_wire_get_i64(response->payload + 40),
+        .sequence = tgc_wire_get_u32(response->payload + 48),
+    };
+    return response->header.result;
+}
+
 int tgc_client_stat(struct tgc_client *client, int semid,
                     struct tgc_sem_metadata *metadata)
 {
@@ -288,28 +316,25 @@ int tgc_client_stat(struct tgc_client *client, int semid,
     if (result != 0) {
         return result;
     }
-    if (response.header.result != 0) {
-        return response.header.result;
+    result = decode_metadata_response(client, &response, metadata);
+    return result < 0 ? result : 0;
+}
+
+int tgc_client_stat_index(struct tgc_client *client, size_t index,
+                          struct tgc_sem_metadata *metadata)
+{
+    if (metadata == NULL || index > UINT32_MAX) {
+        return -EINVAL;
     }
-    if (response.header.payload_length != 56 ||
-        tgc_wire_get_u32(response.payload + 28) != 0 ||
-        tgc_wire_get_u32(response.payload + 52) != 0) {
-        tgc_client_close(client);
-        return -EPROTO;
+    struct tgc_protocol_packet request;
+    request_init(&request, TGC_OPCODE_STAT_INDEX, 4);
+    tgc_wire_put_u32(request.payload, (uint32_t)index);
+    struct tgc_protocol_packet response;
+    int result = exchange(client, &request, &response);
+    if (result != 0) {
+        return result;
     }
-    *metadata = (struct tgc_sem_metadata){
-        .key = tgc_wire_get_i32(response.payload),
-        .uid = tgc_wire_get_u32(response.payload + 4),
-        .gid = tgc_wire_get_u32(response.payload + 8),
-        .cuid = tgc_wire_get_u32(response.payload + 12),
-        .cgid = tgc_wire_get_u32(response.payload + 16),
-        .mode = tgc_wire_get_u32(response.payload + 20),
-        .nsems = tgc_wire_get_u32(response.payload + 24),
-        .otime = tgc_wire_get_i64(response.payload + 32),
-        .ctime = tgc_wire_get_i64(response.payload + 40),
-        .sequence = tgc_wire_get_u32(response.payload + 48),
-    };
-    return 0;
+    return decode_metadata_response(client, &response, metadata);
 }
 
 int tgc_client_set_metadata(struct tgc_client *client, int semid,

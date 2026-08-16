@@ -86,6 +86,8 @@ int tgc_sem_store_setall(struct tgc_sem_store *store, int semid,
                          const uint16_t *values, size_t count, int32_t pid);
 int tgc_sem_store_get_metadata(const struct tgc_sem_store *store, int semid,
                                struct tgc_sem_metadata *metadata);
+int tgc_sem_store_stat_index(const struct tgc_sem_store *store, size_t index,
+                             struct tgc_sem_metadata *metadata);
 int tgc_sem_store_set_metadata(struct tgc_sem_store *store, int semid,
                                uint32_t uid, uint32_t gid, uint32_t mode,
                                struct tgc_sem_identity actor);

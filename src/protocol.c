@@ -81,7 +81,7 @@ static int header_is_valid(const struct tgc_protocol_header *header)
         return -EPROTO;
     }
     if (header->opcode < TGC_OPCODE_PING ||
-        header->opcode > TGC_OPCODE_INFO) {
+        header->opcode > TGC_OPCODE_STAT_INDEX) {
         return -EPROTO;
     }
     if (header->payload_length > TGC_PROTOCOL_MAX_PAYLOAD) {

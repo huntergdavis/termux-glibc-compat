@@ -29,6 +29,7 @@ enum tgc_protocol_opcode {
     TGC_OPCODE_SETMETA = 13,
     TGC_OPCODE_SEMTIMEDOP = 14,
     TGC_OPCODE_INFO = 15,
+    TGC_OPCODE_STAT_INDEX = 16,
 };
 
 struct tgc_protocol_header {
@@ -54,7 +55,8 @@ struct tgc_protocol_packet {
  * the state-core return value in result. GETALL is the only version-1 response
  * with a payload: count:u32 followed by count value:u16 entries. Operations
  * record the caller PID from authenticated socket credentials, never from a
- * client-supplied field.
+ * client-supplied field. New opcodes may add typed response payloads while
+ * retaining this version when the framing and existing operations are stable.
  */
 int tgc_protocol_encode_header(
     uint8_t output[TGC_PROTOCOL_HEADER_SIZE],

@@ -319,6 +319,18 @@ int tgc_sem_store_get_metadata(const struct tgc_sem_store *store, int semid,
     return 0;
 }
 
+int tgc_sem_store_stat_index(const struct tgc_sem_store *store, size_t index,
+                             struct tgc_sem_metadata *metadata)
+{
+    if (store == NULL || metadata == NULL || index >= TGC_SEM_MAX_SETS ||
+        !store->sets[index].active) {
+        return -EINVAL;
+    }
+    int semid = make_id(index, store->sets[index].generation);
+    int result = tgc_sem_store_get_metadata(store, semid, metadata);
+    return result == 0 ? semid : result;
+}
+
 int tgc_sem_store_set_metadata(struct tgc_sem_store *store, int semid,
                                uint32_t uid, uint32_t gid, uint32_t mode,
                                struct tgc_sem_identity actor)

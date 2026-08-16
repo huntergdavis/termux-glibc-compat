@@ -18,16 +18,18 @@
 - [x] Broker-side blocking queues and wakeups
 - [x] `GETPID`, `GETNCNT`, and `GETZCNT`
 - [x] Semaphore owner/mode/time metadata plus `IPC_INFO` and `SEM_INFO`
+- [x] Linux `SEM_STAT` and `SEM_STAT_ANY` indexed lookup
 - [x] `semtimedop` using monotonic deadlines
 - [x] `IPC_RMID` and disconnected-waiter cleanup
 - [ ] `SEM_UNDO` process-exit behavior
 
 ## Milestone 2: Termux glibc integration
 
-- [ ] Patch glibc's SysV semaphore entry points to the client library
+- [x] Patch glibc's SysV semaphore entry points to the client library
+- [x] Link a host glibc 2.44 `libc.so` and pass the public black-box suite
 - [ ] Build through the official `termux/glibc-packages` recipe
 - [ ] Run glibc's `test-sysvsem` plus this repository's black-box suite
-- [ ] Document packaging, rollback, and coexistence with stock glibc
+- [x] Document packaging, rollback, and coexistence with stock glibc
 
 ## Milestone 3: native Steam client
 

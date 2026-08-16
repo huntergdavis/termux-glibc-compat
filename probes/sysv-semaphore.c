@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 
 #include <errno.h>
 #include <signal.h>
@@ -16,6 +16,7 @@ union semun {
     int val;
     struct semid_ds *buf;
     unsigned short *array;
+    struct seminfo *__buf;
 };
 
 static void pause_milliseconds(long milliseconds)
@@ -69,6 +70,60 @@ int main(void)
     if (semctl(semid, 0, GETALL, argument) == -1 ||
         observed[0] != 0 || observed[1] != 1) {
         perror("semctl(GETALL)");
+        failed = 1;
+        goto cleanup;
+    }
+
+    struct semid_ds metadata;
+    argument.buf = &metadata;
+    if (semctl(semid, 0, IPC_STAT, argument) == -1 ||
+        metadata.sem_nsems != 2 || (metadata.sem_perm.mode & 0777U) != 0600U) {
+        perror("semctl(IPC_STAT)");
+        failed = 1;
+        goto cleanup;
+    }
+    metadata.sem_perm.mode =
+        (metadata.sem_perm.mode & ~(unsigned int)0777U) | 0640U;
+    if (semctl(semid, 0, IPC_SET, argument) == -1) {
+        perror("semctl(IPC_SET)");
+        failed = 1;
+        goto cleanup;
+    }
+    if (semctl(semid, 0, IPC_STAT, argument) == -1 ||
+        (metadata.sem_perm.mode & 0777U) != 0640U) {
+        perror("semctl(IPC_STAT after IPC_SET)");
+        failed = 1;
+        goto cleanup;
+    }
+
+    struct seminfo info;
+    argument.__buf = &info;
+    int highest_index = semctl(0, 0, IPC_INFO, argument);
+    if (highest_index == -1 || info.semmni <= 0 ||
+        info.semmsl < 2 || info.semvmx < 1) {
+        perror("semctl(IPC_INFO)");
+        failed = 1;
+        goto cleanup;
+    }
+    struct semid_ds indexed_metadata;
+    argument.buf = &indexed_metadata;
+    if (semctl(highest_index, 0, SEM_STAT_ANY, argument) == -1 ||
+        indexed_metadata.sem_nsems == 0) {
+        perror("semctl(SEM_STAT_ANY)");
+        failed = 1;
+        goto cleanup;
+    }
+
+    struct sembuf timed_decrement = {
+        .sem_num = 0,
+        .sem_op = -1,
+        .sem_flg = 0,
+    };
+    const struct timespec timeout = {.tv_sec = 0, .tv_nsec = 20000000L};
+    errno = 0;
+    if (semtimedop(semid, &timed_decrement, 1, &timeout) != -1 ||
+        errno != EAGAIN) {
+        fprintf(stderr, "semtimedop timeout mismatch: errno=%d\n", errno);
         failed = 1;
         goto cleanup;
     }

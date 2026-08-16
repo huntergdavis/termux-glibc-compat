@@ -72,6 +72,12 @@ int main(void)
     header.payload_length = 16;
     CHECK(tgc_protocol_encode_header(wire, &header) == 0);
 
+    header.opcode = TGC_OPCODE_STAT_INDEX;
+    header.payload_length = 4;
+    CHECK(tgc_protocol_encode_header(wire, &header) == 0);
+    header.opcode = TGC_OPCODE_STAT_INDEX + 1;
+    CHECK(tgc_protocol_encode_header(wire, &header) == -EPROTO);
+
     puts("protocol: PASS");
     return EXIT_SUCCESS;
 }

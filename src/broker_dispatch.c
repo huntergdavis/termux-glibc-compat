@@ -164,6 +164,24 @@ static int dispatch_semop(struct tgc_sem_store *store,
     return result;
 }
 
+static void encode_metadata(struct tgc_protocol_packet *response,
+                            const struct tgc_sem_metadata *metadata)
+{
+    tgc_wire_put_i32(response->payload, metadata->key);
+    tgc_wire_put_u32(response->payload + 4, metadata->uid);
+    tgc_wire_put_u32(response->payload + 8, metadata->gid);
+    tgc_wire_put_u32(response->payload + 12, metadata->cuid);
+    tgc_wire_put_u32(response->payload + 16, metadata->cgid);
+    tgc_wire_put_u32(response->payload + 20, metadata->mode);
+    tgc_wire_put_u32(response->payload + 24, metadata->nsems);
+    tgc_wire_put_u32(response->payload + 28, 0);
+    tgc_wire_put_i64(response->payload + 32, metadata->otime);
+    tgc_wire_put_i64(response->payload + 40, metadata->ctime);
+    tgc_wire_put_u32(response->payload + 48, metadata->sequence);
+    tgc_wire_put_u32(response->payload + 52, 0);
+    response->header.payload_length = METADATA_SIZE;
+}
+
 static int dispatch_stat(const struct tgc_sem_store *store,
                          const struct tgc_protocol_packet *request,
                          struct tgc_protocol_packet *response)
@@ -177,20 +195,25 @@ static int dispatch_stat(const struct tgc_sem_store *store,
     if (result != 0) {
         return result;
     }
-    tgc_wire_put_i32(response->payload, metadata.key);
-    tgc_wire_put_u32(response->payload + 4, metadata.uid);
-    tgc_wire_put_u32(response->payload + 8, metadata.gid);
-    tgc_wire_put_u32(response->payload + 12, metadata.cuid);
-    tgc_wire_put_u32(response->payload + 16, metadata.cgid);
-    tgc_wire_put_u32(response->payload + 20, metadata.mode);
-    tgc_wire_put_u32(response->payload + 24, metadata.nsems);
-    tgc_wire_put_u32(response->payload + 28, 0);
-    tgc_wire_put_i64(response->payload + 32, metadata.otime);
-    tgc_wire_put_i64(response->payload + 40, metadata.ctime);
-    tgc_wire_put_u32(response->payload + 48, metadata.sequence);
-    tgc_wire_put_u32(response->payload + 52, 0);
-    response->header.payload_length = METADATA_SIZE;
+    encode_metadata(response, &metadata);
     return 0;
+}
+
+static int dispatch_stat_index(const struct tgc_sem_store *store,
+                               const struct tgc_protocol_packet *request,
+                               struct tgc_protocol_packet *response)
+{
+    if (request->header.payload_length != SEMID_SIZE) {
+        return -EMSGSIZE;
+    }
+    struct tgc_sem_metadata metadata;
+    int result = tgc_sem_store_stat_index(
+        store, tgc_wire_get_u32(request->payload), &metadata);
+    if (result < 0) {
+        return result;
+    }
+    encode_metadata(response, &metadata);
+    return result;
 }
 
 static int dispatch_setmeta(struct tgc_sem_store *store,
@@ -288,6 +311,9 @@ int tgc_broker_dispatch(struct tgc_sem_store *store,
         break;
     case TGC_OPCODE_STAT:
         result = dispatch_stat(store, request, response);
+        break;
+    case TGC_OPCODE_STAT_INDEX:
+        result = dispatch_stat_index(store, request, response);
         break;
     case TGC_OPCODE_SETMETA:
         result = dispatch_setmeta(store, request, actor.identity);

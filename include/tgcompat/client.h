@@ -44,6 +44,8 @@ int tgc_client_semtimedop(struct tgc_client *client, int semid,
                           int64_t timeout_nanoseconds);
 int tgc_client_stat(struct tgc_client *client, int semid,
                     struct tgc_sem_metadata *metadata);
+int tgc_client_stat_index(struct tgc_client *client, size_t index,
+                          struct tgc_sem_metadata *metadata);
 int tgc_client_set_metadata(struct tgc_client *client, int semid,
                             uint32_t uid, uint32_t gid, uint32_t mode);
 int tgc_client_info(struct tgc_client *client, int dynamic,

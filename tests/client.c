@@ -71,6 +71,11 @@ int main(void)
     CHECK(metadata.key == 9876 && metadata.uid == geteuid() &&
           metadata.gid == getegid() && metadata.mode == 0600 &&
           metadata.nsems == 2 && metadata.otime == 0);
+    struct tgc_sem_metadata indexed_metadata;
+    CHECK(tgc_client_stat_index(&client, 0, &indexed_metadata) == semid);
+    CHECK(indexed_metadata.key == 9876 && indexed_metadata.nsems == 2);
+    CHECK(tgc_client_stat_index(&client, TGC_SEM_MAX_SETS,
+                                &indexed_metadata) == -EINVAL);
     CHECK(tgc_client_set_metadata(&client, semid, geteuid(), getegid(), 0640) ==
           0);
     CHECK(tgc_client_stat(&client, semid, &metadata) == 0);

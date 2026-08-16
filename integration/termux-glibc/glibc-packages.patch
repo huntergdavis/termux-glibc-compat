@@ -1,0 +1,35 @@
+diff --git a/gpkg/glibc/build.sh b/gpkg/glibc/build.sh
+--- a/gpkg/glibc/build.sh
++++ b/gpkg/glibc/build.sh
+@@ -39,6 +39,21 @@ termux_step_pre_configure() {
+ 	# installing shmem-android scripts for system V shared memory emulation
+ 	cp ${TERMUX_PKG_BUILDER_DIR}/shmem-android.* ${TERMUX_PKG_SRCDIR}/sysvipc/
+ 
++	# installing the same-UID SysV semaphore broker client
++	install -d ${TERMUX_PKG_SRCDIR}/include/tgcompat
++	cp ${TERMUX_PKG_BUILDER_DIR}/tgcompat-client.h \
++		${TERMUX_PKG_SRCDIR}/include/tgcompat/client.h
++	cp ${TERMUX_PKG_BUILDER_DIR}/tgcompat-protocol.h \
++		${TERMUX_PKG_SRCDIR}/include/tgcompat/protocol.h
++	cp ${TERMUX_PKG_BUILDER_DIR}/tgcompat-sem_store.h \
++		${TERMUX_PKG_SRCDIR}/include/tgcompat/sem_store.h
++	cp ${TERMUX_PKG_BUILDER_DIR}/tgcompat-transport.h \
++		${TERMUX_PKG_SRCDIR}/include/tgcompat/transport.h
++	cp ${TERMUX_PKG_BUILDER_DIR}/tgcompat-glibc.h \
++		${TERMUX_PKG_SRCDIR}/include/tgcompat/glibc.h
++	cp ${TERMUX_PKG_BUILDER_DIR}/tgcompat-{client,protocol,transport,glibc}.c \
++		${TERMUX_PKG_SRCDIR}/sysvipc/
++
+ 	# `fakesyscall.json` - json file that stores a list of unsupported syscalls for Termux in keys,
+ 	# the name of which indicates the fakesyscall function and how it will be launched
+ 	# == Syntax ==
+diff --git a/gpkg/glibc/sysvipc-Makefile.patch b/gpkg/glibc/sysvipc-Makefile.patch
+--- a/gpkg/glibc/sysvipc-Makefile.patch
++++ b/gpkg/glibc/sysvipc-Makefile.patch
+@@ -3 +3 @@
+-@@ -28,6 +28,7 @@
++@@ -28,6 +28,8 @@
+@@ -7 +7,2 @@
+-+	    shmem-android \
+++	    tgcompat-client tgcompat-protocol tgcompat-transport tgcompat-glibc \
+++	    shmem-android \

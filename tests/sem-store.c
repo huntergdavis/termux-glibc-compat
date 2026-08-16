@@ -31,6 +31,12 @@ int main(void)
     CHECK(metadata.cuid == 0 && metadata.cgid == 0);
     CHECK(metadata.mode == 0 && metadata.nsems == 2);
     CHECK(metadata.otime == 0 && metadata.ctime > 0 && metadata.sequence > 0);
+    struct tgc_sem_metadata indexed_metadata;
+    CHECK(tgc_sem_store_stat_index(store, 0, &indexed_metadata) == keyed);
+    CHECK(indexed_metadata.key == metadata.key &&
+          indexed_metadata.sequence == metadata.sequence);
+    CHECK(tgc_sem_store_stat_index(store, TGC_SEM_MAX_SETS,
+                                   &indexed_metadata) == -EINVAL);
     const struct tgc_sem_identity root_identity = {.uid = 0, .gid = 0};
     CHECK(tgc_sem_store_set_metadata(store, keyed, 0, 0, 0640,
                                      root_identity) == 0);
@@ -137,6 +143,7 @@ int main(void)
     CHECK(tgc_sem_store_tryop(store, keyed, &undo, 0, 1104) == -EINVAL);
 
     CHECK(tgc_sem_store_remove(store, keyed) == 0);
+    CHECK(tgc_sem_store_stat_index(store, 0, &indexed_metadata) == -EINVAL);
     CHECK(tgc_sem_store_getval(store, keyed, 0) == -EINVAL);
     int replacement = tgc_sem_store_get(store, TGC_IPC_PRIVATE, 1, 0);
     CHECK(replacement > 0);
