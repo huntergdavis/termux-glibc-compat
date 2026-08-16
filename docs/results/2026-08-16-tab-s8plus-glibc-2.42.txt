@@ -21,3 +21,6 @@ SysV semaphores unsupported: errno=38
 RESULT sysv-semaphore UNSUPPORTED
 
 SUMMARY pass=2 unsupported=2 fail=0
+
+[sem-store]
+sem-store: PASS

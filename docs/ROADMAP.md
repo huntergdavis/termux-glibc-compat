@@ -11,8 +11,9 @@
 
 - [ ] Versioned request/response definitions
 - [ ] Same-UID broker startup and peer validation
-- [ ] `semget` and generation-safe IDs
-- [ ] `GETVAL`, `GETALL`, `SETVAL`, and `SETALL`
+- [x] In-memory `semget`, key lookup, and generation-safe IDs
+- [x] In-memory `GETVAL`, `GETALL`, `SETVAL`, and atomic `SETALL`
+- [ ] Expose the completed state-core operations through the broker
 - [ ] Atomic `semop`, blocking waiters, `IPC_NOWAIT`, and wakeups
 - [ ] `GETPID`, `GETNCNT`, and `GETZCNT`
 - [ ] `semtimedop` using monotonic deadlines

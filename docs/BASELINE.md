@@ -30,6 +30,8 @@ The device run used `gcc-glibc` 14.2.1-1 to produce glibc-linked AArch64
 binaries and `glibc-runner` to execute them. It reported two passes, two
 unsupported facilities, and zero failures. The complete stdout is retained in
 [`docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt`](results/2026-08-16-tab-s8plus-glibc-2.42.txt).
+The first generation-safe semaphore state-core test was subsequently compiled
+with the same toolchain and passed on the tablet as well.
 
 ## Upstream source audit
 
