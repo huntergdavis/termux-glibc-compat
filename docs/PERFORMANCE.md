@@ -35,6 +35,13 @@ speedup on this host; scheduler and socket context-switch cost dominate the C
 work. The release target keeps the flags for size and target builds, while the
 tablet benchmark remains the decision gate.
 
+Removing whole-packet zeroing then reduced three-run `-O2` medians to 37,218.8
+ns for raw `PING` and 42,394.4 ns for raw `GETVAL`. Relative to the initial
+baseline, `GETVAL` latency is down 18.0% and throughput is up 21.9%. The exact
+high-level persistent client measured median 42,823.6 ns `PING` and 46,793.3 ns
+`GETVAL`, or roughly 21,400 complete validated `GETVAL` calls per second. It
+adds fork detection and full response correlation without reconnecting.
+
 ## Rules for performance claims
 
 1. Reuse a persistent connection; reconnect cost is not a hot-path design.

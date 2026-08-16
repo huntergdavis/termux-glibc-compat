@@ -1,0 +1,134 @@
+#define _GNU_SOURCE
+
+#include <tgcompat/client.h>
+#include <tgcompat/sem_store.h>
+
+#include <errno.h>
+#include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+#define CHECK(expression)                                                       \
+    do {                                                                        \
+        if (!(expression)) {                                                    \
+            fprintf(stderr, "CHECK failed at %s:%d: %s\n", __FILE__, __LINE__, \
+                    #expression);                                               \
+            failed = 1;                                                         \
+            goto done;                                                          \
+        }                                                                       \
+    } while (0)
+
+static int wait_for_broker(struct tgc_client *client)
+{
+    const struct timespec pause = {.tv_sec = 0, .tv_nsec = 10000000L};
+    for (int attempt = 0; attempt < 200; ++attempt) {
+        int result = tgc_client_ping(client);
+        if (result == 0) {
+            return 0;
+        }
+        if (result != -ENOENT && result != -ECONNREFUSED) {
+            return result;
+        }
+        (void)nanosleep(&pause, NULL);
+    }
+    return -ETIMEDOUT;
+}
+
+int main(void)
+{
+    int failed = 0;
+    char directory[] = "/tmp/tgcompat-client.XXXXXX";
+    char *created_directory = mkdtemp(directory);
+    char socket_path[sizeof(directory) + 24];
+    pid_t daemon_pid = -1;
+    pid_t child_pid = -1;
+    struct tgc_client client;
+    int client_initialized = 0;
+    CHECK(created_directory != NULL);
+    int written = snprintf(socket_path, sizeof(socket_path), "%s/broker.sock",
+                           created_directory);
+    CHECK(written > 0 && (size_t)written < sizeof(socket_path));
+    CHECK(tgc_client_init(&client, socket_path) == 0);
+    client_initialized = 1;
+
+    daemon_pid = fork();
+    CHECK(daemon_pid >= 0);
+    if (daemon_pid == 0) {
+        execl("./build/tgcompatd", "tgcompatd", "--socket", socket_path,
+              (char *)NULL);
+        _exit(127);
+    }
+    CHECK(wait_for_broker(&client) == 0);
+
+    int semid = tgc_client_semget(&client, 9876, 2, TGC_IPC_CREAT | 0600);
+    CHECK(semid > 0);
+    uint16_t set_values[] = {3, 4};
+    CHECK(tgc_client_setall(&client, semid, set_values, 2) == 0);
+    uint16_t get_values[] = {0, 0};
+    CHECK(tgc_client_getall(&client, semid, get_values, 2) == 0);
+    CHECK(get_values[0] == 3 && get_values[1] == 4);
+
+    const struct tgc_sem_op operations[] = {
+        {.sem_num = 0, .sem_op = -2, .sem_flg = 0},
+        {.sem_num = 1, .sem_op = 2, .sem_flg = 0},
+    };
+    CHECK(tgc_client_semop(&client, semid, operations, 2) == 0);
+    CHECK(tgc_client_getval(&client, semid, 0) == 1);
+    CHECK(tgc_client_getval(&client, semid, 1) == 6);
+
+    const struct tgc_sem_op blocked_nowait = {
+        .sem_num = 0,
+        .sem_op = -2,
+        .sem_flg = TGC_IPC_NOWAIT,
+    };
+    CHECK(tgc_client_semop(&client, semid, &blocked_nowait, 1) == -EAGAIN);
+
+    child_pid = fork();
+    CHECK(child_pid >= 0);
+    if (child_pid == 0) {
+        /* The copied client owns the parent's descriptor. Its PID check must
+         * close that copy and establish fresh SO_PEERCRED before mutation. */
+        int result = tgc_client_setval(&client, semid, 1, 8);
+        _exit(result == 0 ? 0 : 20);
+    }
+    int child_status = 0;
+    CHECK(waitpid(child_pid, &child_status, 0) == child_pid);
+    CHECK(WIFEXITED(child_status) && WEXITSTATUS(child_status) == 0);
+    CHECK(tgc_client_getval(&client, semid, 1) == 8);
+    CHECK(tgc_client_getpid(&client, semid, 1) == child_pid);
+    child_pid = -1;
+
+    CHECK(tgc_client_remove(&client, semid) == 0);
+    CHECK(tgc_client_getval(&client, semid, 0) == -EINVAL);
+
+done:
+    if (child_pid > 0) {
+        (void)kill(child_pid, SIGKILL);
+        (void)waitpid(child_pid, NULL, 0);
+    }
+    if (client_initialized != 0) {
+        tgc_client_close(&client);
+    }
+    if (daemon_pid > 0) {
+        int status = 0;
+        (void)kill(daemon_pid, SIGTERM);
+        if (waitpid(daemon_pid, &status, 0) != daemon_pid ||
+            !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            failed = 1;
+        }
+    }
+    if (created_directory != NULL) {
+        (void)unlink(socket_path);
+        if (rmdir(created_directory) != 0) {
+            failed = 1;
+        }
+    }
+    if (!failed) {
+        puts("client: PASS");
+    }
+    return failed != 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+}

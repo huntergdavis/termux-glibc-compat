@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 
+#include <tgcompat/client.h>
 #include <tgcompat/protocol.h>
 #include <tgcompat/sem_store.h>
 #include <tgcompat/transport.h>
@@ -127,6 +128,54 @@ static int run_case(const char *name, int socket_fd,
     return 0;
 }
 
+typedef int (*client_case_fn)(struct tgc_client *client, int semid);
+
+static int client_ping_case(struct tgc_client *client, int semid)
+{
+    (void)semid;
+    return tgc_client_ping(client);
+}
+
+static int client_getval_case(struct tgc_client *client, int semid)
+{
+    int result = tgc_client_getval(client, semid, 0);
+    return result == 7 ? 0 : result < 0 ? result : -EPROTO;
+}
+
+static int run_client_case(const char *name, struct tgc_client *client,
+                           int semid, client_case_fn operation,
+                           uint32_t iterations)
+{
+    for (uint32_t i = 0; i < 1000; ++i) {
+        int result = operation(client, semid);
+        if (result != 0) {
+            return result;
+        }
+    }
+
+    struct timespec start;
+    struct timespec end;
+    if (clock_gettime(CLOCK_MONOTONIC, &start) != 0) {
+        return -errno;
+    }
+    for (uint32_t i = 0; i < iterations; ++i) {
+        int result = operation(client, semid);
+        if (result != 0) {
+            return result;
+        }
+    }
+    if (clock_gettime(CLOCK_MONOTONIC, &end) != 0) {
+        return -errno;
+    }
+
+    uint64_t elapsed = elapsed_nanoseconds(&start, &end);
+    double nanoseconds_per_operation = (double)elapsed / (double)iterations;
+    printf("%s iterations=%u elapsed_ms=%.3f ns_per_op=%.1f ops_per_second=%.0f\n",
+           name, iterations, (double)elapsed / 1000000.0,
+           nanoseconds_per_operation, 1000000000.0 / nanoseconds_per_operation);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     uint32_t iterations = 100000;
@@ -152,6 +201,8 @@ int main(int argc, char **argv)
     char socket_path[sizeof(directory) + 24];
     pid_t daemon_pid = -1;
     int socket_fd = -1;
+    struct tgc_client client;
+    int client_initialized = 0;
     if (created_directory == NULL ||
         snprintf(socket_path, sizeof(socket_path), "%s/broker.sock",
                  created_directory) <= 0) {
@@ -218,9 +269,31 @@ int main(int argc, char **argv)
     if (result != 0) {
         fprintf(stderr, "getval benchmark: %s\n", strerror(-result));
         failed = 1;
+        goto done;
+    }
+
+    result = tgc_client_init(&client, socket_path);
+    if (result != 0) {
+        fprintf(stderr, "client init: %s\n", strerror(-result));
+        failed = 1;
+        goto done;
+    }
+    client_initialized = 1;
+    result = run_client_case("client-ping", &client, semid,
+                             client_ping_case, iterations);
+    if (result == 0) {
+        result = run_client_case("client-getval", &client, semid,
+                                 client_getval_case, iterations);
+    }
+    if (result != 0) {
+        fprintf(stderr, "client benchmark: %s\n", strerror(-result));
+        failed = 1;
     }
 
 done:
+    if (client_initialized != 0) {
+        tgc_client_close(&client);
+    }
     if (socket_fd >= 0) {
         (void)close(socket_fd);
     }

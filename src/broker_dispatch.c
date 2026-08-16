@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 enum {
     SEMGET_SIZE = 12,
@@ -17,11 +16,12 @@ enum {
 static void prepare_response(const struct tgc_protocol_packet *request,
                              struct tgc_protocol_packet *response)
 {
-    memset(response, 0, sizeof(*response));
     response->header.version = TGC_PROTOCOL_VERSION;
     response->header.kind = TGC_PROTOCOL_RESPONSE;
     response->header.opcode = request->header.opcode;
     response->header.request_id = request->header.request_id;
+    response->header.payload_length = 0;
+    response->header.result = 0;
 }
 
 static int dispatch_semget(struct tgc_sem_store *store,

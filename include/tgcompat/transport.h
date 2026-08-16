@@ -16,6 +16,9 @@ enum {
  */
 int tgc_transport_listen(const char *socket_path, uid_t expected_uid);
 
+/* Validate and connect to an owner-only broker socket. */
+int tgc_transport_connect(const char *socket_path, uid_t expected_uid);
+
 /* Authenticate an already-connected Linux Unix socket with SO_PEERCRED. */
 int tgc_transport_authenticate(int socket_fd, uid_t expected_uid,
                                pid_t *peer_pid);

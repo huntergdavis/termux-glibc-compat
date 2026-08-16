@@ -82,6 +82,13 @@ blocked request for a set retries, preserving queue order; unrelated sets can
 make progress concurrently. A timed peer check removes abandoned waiters when
 a client disconnects.
 
+The native client is a caller-owned structure rather than a heap object. One
+instance belongs to one calling thread: after its lazy first connection, the
+steady-state path has no allocation, client mutex, process creation, or socket
+reconnect. Every call validates its correlated response. A cached owner PID
+detects `fork`, closes the inherited descriptor in the child, and reconnects so
+the broker's `SO_PEERCRED` PID remains authoritative for `GETPID` semantics.
+
 ## Robust lists
 
 The current Termux glibc package removes NPTL robust-list registration and

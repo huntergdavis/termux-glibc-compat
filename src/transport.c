@@ -124,6 +124,53 @@ int tgc_transport_listen(const char *socket_path, uid_t expected_uid)
     return socket_fd;
 }
 
+int tgc_transport_connect(const char *socket_path, uid_t expected_uid)
+{
+    char directory[PATH_MAX];
+    int result = runtime_directory(socket_path, directory);
+    if (result != 0) {
+        return result;
+    }
+    result = validate_runtime_directory(directory, expected_uid);
+    if (result != 0) {
+        return result;
+    }
+
+    struct stat socket_status;
+    if (lstat(socket_path, &socket_status) != 0) {
+        return -errno;
+    }
+    if (!S_ISSOCK(socket_status.st_mode) ||
+        socket_status.st_uid != expected_uid ||
+        (socket_status.st_mode & 0777U) != 0600U) {
+        return -EPERM;
+    }
+
+    int socket_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (socket_fd < 0) {
+        return -errno;
+    }
+    struct sockaddr_un address;
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    size_t path_length = strlen(socket_path);
+    memcpy(address.sun_path, socket_path, path_length + 1);
+    if (connect(socket_fd, (const struct sockaddr *)&address,
+                (socklen_t)(offsetof(struct sockaddr_un, sun_path) +
+                            path_length + 1)) != 0) {
+        int saved_errno = errno;
+        (void)close(socket_fd);
+        return -saved_errno;
+    }
+    pid_t server_pid = 0;
+    result = tgc_transport_authenticate(socket_fd, expected_uid, &server_pid);
+    if (result != 0) {
+        (void)close(socket_fd);
+        return result;
+    }
+    return socket_fd;
+}
+
 int tgc_transport_authenticate(int socket_fd, uid_t expected_uid,
                                pid_t *peer_pid)
 {
@@ -176,7 +223,6 @@ int tgc_transport_receive(int socket_fd, struct tgc_protocol_packet *packet)
         return result;
     }
 
-    memset(packet, 0, sizeof(*packet));
     result = tgc_protocol_decode_header(wire_header, &packet->header);
     if (result != 0) {
         return result;

@@ -1,4 +1,5 @@
 CC ?= cc
+AR ?= ar
 CFLAGS ?= -O2 -g
 CPPFLAGS ?=
 LDFLAGS ?=
@@ -18,13 +19,14 @@ PROBE_NAMES := pthread-basic robust-list sysv-semaphore sysv-shm
 PROBES := $(addprefix build/,$(PROBE_NAMES))
 CORE_OBJECTS := build/sem_store.o build/protocol.o build/broker_dispatch.o
 SERVER_OBJECTS := build/transport.o build/broker_server.o
+CLIENT_OBJECTS := build/protocol.o build/transport.o build/client.o
 TESTS := build/test-sem-store build/test-protocol build/test-broker-dispatch \
 	build/test-transport build/test-transport-security \
-	build/test-broker-integration
+	build/test-broker-integration build/test-client
 
 .PHONY: all benchmark check clean release
 
-all: $(PROBES) build/tgcompatd $(TESTS)
+all: $(PROBES) build/tgcompatd build/libtgcompat-client.a $(TESTS)
 
 build:
 	mkdir -p $@
@@ -45,6 +47,14 @@ build/broker_dispatch.o: src/broker_dispatch.c include/tgcompat/broker.h \
 build/transport.o: src/transport.c include/tgcompat/transport.h \
 		include/tgcompat/protocol.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 -c $< -o $@
+
+build/client.o: src/client.c include/tgcompat/client.h \
+		include/tgcompat/protocol.h include/tgcompat/sem_store.h \
+		include/tgcompat/transport.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 -c $< -o $@
+
+build/libtgcompat-client.a: $(CLIENT_OBJECTS) | build
+	$(AR) rcs $@ $^
 
 build/broker_server.o: src/broker_server.c include/tgcompat/broker.h \
 		include/tgcompat/transport.h | build
@@ -77,10 +87,14 @@ build/test-broker-integration: tests/broker-integration.c build/protocol.o \
 		tests/broker-integration.c build/protocol.o build/transport.o \
 		$(LDFLAGS) -o $@
 
-build/benchmark-broker-roundtrip: benchmarks/broker-roundtrip.c \
-		build/protocol.o build/transport.o build/tgcompatd | build
+build/test-client: tests/client.c $(CLIENT_OBJECTS) build/tgcompatd | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 \
-		benchmarks/broker-roundtrip.c build/protocol.o build/transport.o \
+		tests/client.c $(CLIENT_OBJECTS) $(LDFLAGS) -o $@
+
+build/benchmark-broker-roundtrip: benchmarks/broker-roundtrip.c \
+		$(CLIENT_OBJECTS) build/tgcompatd | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 \
+		benchmarks/broker-roundtrip.c $(CLIENT_OBJECTS) \
 		$(LDFLAGS) -o $@
 
 benchmark: build/benchmark-broker-roundtrip
@@ -90,7 +104,7 @@ release:
 	$(MAKE) clean
 	$(MAKE) CFLAGS="$(RELEASE_CFLAGS) $(RELEASE_CPU_FLAGS)" \
 		LDFLAGS="$(RELEASE_LDFLAGS)" build/tgcompatd \
-		build/benchmark-broker-roundtrip
+		build/libtgcompat-client.a build/benchmark-broker-roundtrip
 	$(STRIP) --strip-unneeded build/tgcompatd \
 		build/benchmark-broker-roundtrip
 
@@ -102,6 +116,7 @@ check: all
 	./build/test-transport
 	./build/test-transport-security
 	./build/test-broker-integration
+	./build/test-client
 
 clean:
 	$(RM) -r build

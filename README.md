@@ -60,6 +60,8 @@ The first milestone is checked in:
 - a runnable `tgcompatd` Unix-socket broker with mode-0700 runtime-directory
   validation, a mode-0600 socket, and same-UID `SO_PEERCRED` authentication;
 - concurrent client workers and broker-side FIFO `semop` wait/wakeup handling;
+- a lazy, persistent, per-thread native client API that reconnects safely after
+  `fork` and never allocates or reconnects in steady-state calls;
 - an evidence-backed compatibility matrix;
 - a no-ptrace architecture for a per-Termux-UID semaphore broker; and
 - a staged path from probes to a patched Termux glibc package and native Steam
@@ -114,6 +116,10 @@ make release
 
 On-device builds may add `RELEASE_CPU_FLAGS=-mcpu=native`; portable published
 binaries deliberately do not assume one ARM core design.
+
+`build/libtgcompat-client.a` contains the caller-owned persistent client. Its
+public API is [`include/tgcompat/client.h`](include/tgcompat/client.h); negative
+errno results are preserved for the thin glibc boundary to translate.
 
 On Termux, compile the probes with the same glibc toolchain used by the target
 runtime. Do not use the ordinary Bionic-linked `gcc` alias to infer glibc
