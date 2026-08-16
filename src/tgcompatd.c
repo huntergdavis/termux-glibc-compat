@@ -4,14 +4,16 @@
 #include <tgcompat/transport.h>
 
 #include <errno.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
-#include <stdatomic.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/signalfd.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -29,25 +31,19 @@ struct client_worker {
     int active;
 };
 
-static volatile sig_atomic_t stop_requested;
-
-static void request_stop(int signal_number)
+static int create_signal_fd(void)
 {
-    (void)signal_number;
-    stop_requested = 1;
-}
-
-static int install_signal_handlers(void)
-{
-    struct sigaction action;
-    memset(&action, 0, sizeof(action));
-    action.sa_handler = request_stop;
-    if (sigemptyset(&action.sa_mask) != 0 ||
-        sigaction(SIGINT, &action, NULL) != 0 ||
-        sigaction(SIGTERM, &action, NULL) != 0) {
+    sigset_t mask;
+    if (sigemptyset(&mask) != 0 || sigaddset(&mask, SIGINT) != 0 ||
+        sigaddset(&mask, SIGTERM) != 0) {
         return -errno;
     }
-    return 0;
+    int result = pthread_sigmask(SIG_BLOCK, &mask, NULL);
+    if (result != 0) {
+        return -result;
+    }
+    int signal_fd = signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
+    return signal_fd >= 0 ? signal_fd : -errno;
 }
 
 static void usage(FILE *stream, const char *program)
@@ -136,9 +132,9 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    int result = install_signal_handlers();
-    if (result != 0) {
-        fprintf(stderr, "tgcompatd: signal setup: %s\n", strerror(-result));
+    int signal_fd = create_signal_fd();
+    if (signal_fd < 0) {
+        fprintf(stderr, "tgcompatd: signal setup: %s\n", strerror(-signal_fd));
         return EXIT_FAILURE;
     }
 
@@ -147,34 +143,22 @@ int main(int argc, char **argv)
     if (listener_fd < 0) {
         fprintf(stderr, "tgcompatd: listen %s: %s\n", socket_path,
                 strerror(-listener_fd));
+        (void)close(signal_fd);
         return EXIT_FAILURE;
     }
     struct tgc_broker *broker = tgc_broker_create();
     if (broker == NULL) {
         fprintf(stderr, "tgcompatd: state allocation: %s\n", strerror(errno));
         (void)close(listener_fd);
+        (void)close(signal_fd);
         (void)unlink(socket_path);
         return EXIT_FAILURE;
     }
     pthread_attr_t worker_attributes;
-    result = pthread_attr_init(&worker_attributes);
+    int result = pthread_attr_init(&worker_attributes);
     int worker_attributes_initialized = result == 0;
     if (result == 0) {
         result = pthread_attr_setstacksize(&worker_attributes, 256U * 1024U);
-    }
-    sigset_t worker_signal_mask;
-    if (result == 0) {
-        result = sigemptyset(&worker_signal_mask);
-    }
-    if (result == 0) {
-        result = sigaddset(&worker_signal_mask, SIGINT);
-    }
-    if (result == 0) {
-        result = sigaddset(&worker_signal_mask, SIGTERM);
-    }
-    if (result == 0) {
-        result = pthread_attr_setsigmask_np(&worker_attributes,
-                                            &worker_signal_mask);
     }
     if (result != 0) {
         fprintf(stderr, "tgcompatd: worker attributes: %s\n", strerror(result));
@@ -183,6 +167,7 @@ int main(int argc, char **argv)
         }
         tgc_broker_destroy(broker);
         (void)close(listener_fd);
+        (void)close(signal_fd);
         (void)unlink(socket_path);
         return EXIT_FAILURE;
     }
@@ -191,12 +176,43 @@ int main(int argc, char **argv)
     int failed = 0;
     struct client_worker workers[MAX_CLIENTS];
     memset(workers, 0, sizeof(workers));
-    while (stop_requested == 0) {
+    struct pollfd poll_fds[2] = {
+        {.fd = signal_fd, .events = POLLIN},
+        {.fd = listener_fd, .events = POLLIN},
+    };
+    for (;;) {
+        int poll_result = poll(poll_fds, 2, -1);
+        if (poll_result < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            fprintf(stderr, "tgcompatd: poll: %s\n", strerror(errno));
+            failed = 1;
+            break;
+        }
+        if ((poll_fds[0].revents & POLLIN) != 0) {
+            struct signalfd_siginfo signal_info;
+            ssize_t bytes = read(signal_fd, &signal_info,
+                                 sizeof(signal_info));
+            if (bytes != (ssize_t)sizeof(signal_info) &&
+                !(bytes < 0 && errno == EAGAIN)) {
+                fprintf(stderr, "tgcompatd: signal read: %s\n",
+                        bytes < 0 ? strerror(errno) : "short read");
+                failed = 1;
+            }
+            break;
+        }
+        if ((poll_fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 ||
+            (poll_fds[1].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+            fprintf(stderr, "tgcompatd: poll descriptor failure\n");
+            failed = 1;
+            break;
+        }
+        if ((poll_fds[1].revents & POLLIN) == 0) {
+            continue;
+        }
         int client_fd = accept4(listener_fd, NULL, NULL, SOCK_CLOEXEC);
         if (client_fd < 0) {
-            if (errno == EINTR && stop_requested != 0) {
-                break;
-            }
             if (errno == EINTR) {
                 continue;
             }
@@ -237,6 +253,7 @@ int main(int argc, char **argv)
 
     (void)pthread_attr_destroy(&worker_attributes);
     (void)close(listener_fd);
+    (void)close(signal_fd);
     stop_and_join_workers(workers);
     tgc_broker_destroy(broker);
     if (unlink(socket_path) != 0 && errno != ENOENT) {
