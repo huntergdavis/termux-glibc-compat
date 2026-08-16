@@ -116,7 +116,9 @@ transport, client, fork, timeout, and `SEM_UNDO` suite without conflating those
 results with the separate host-libc capability probes. `make check` also works
 when Termux's `libandroid-shmem` and `libandroid-sysv-semaphore` development
 packages are installed; the build selects those Bionic link shims
-automatically. Glibc behavior must still be tested through `glibc-runner`.
+automatically. Android seccomp `SIGSYS` is reported as `UNSUPPORTED`, not as a
+false semantic pass. Glibc behavior must still be tested through
+`glibc-runner`.
 
 The runner reports `PASS`, `UNSUPPORTED`, or `FAIL`. `UNSUPPORTED` is a useful
 Android baseline, not a false pass. A broken implementation that advertises a

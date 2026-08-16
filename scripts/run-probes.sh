@@ -22,6 +22,13 @@ fi
 passed=0
 unsupported=0
 failed=0
+android_sigsys_status=
+if [[ $(uname -o 2>/dev/null || true) == Android ]]; then
+    sigsys_number=$(kill -l SIGSYS 2>/dev/null || true)
+    if [[ $sigsys_number =~ ^[1-9][0-9]*$ ]]; then
+        android_sigsys_status=$((128 + sigsys_number))
+    fi
+fi
 
 for name in "${probes[@]}"; do
     printf '\n[%s]\n' "$name"
@@ -32,7 +39,7 @@ for name in "${probes[@]}"; do
             printf 'RESULT %s PASS\n' "$name"
             ((passed += 1))
             ;;
-        77)
+        77|"$android_sigsys_status")
             printf 'RESULT %s UNSUPPORTED\n' "$name"
             ((unsupported += 1))
             ;;
