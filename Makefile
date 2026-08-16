@@ -25,6 +25,7 @@ ANDROID_ROOT_SHIM_CFLAGS ?= -O3 -DNDEBUG -fPIC -fvisibility=hidden \
 	-fno-semantic-interposition -ffunction-sections -fdata-sections
 ANDROID_ROOT_SHIM_LDFLAGS ?= -shared -Wl,-O2,--as-needed,--gc-sections \
 	-Wl,-z,relro,-z,now
+GLIBC_TEST_CFLAGS ?= -O2 -g
 
 WARNINGS := -Wall -Wextra -Werror -Wpedantic -Wcast-qual -Wformat=2 \
 	-Wshadow -Wstrict-prototypes
@@ -101,14 +102,17 @@ build/libtgcompat-android-root.so: src/android_root_shim.c \
 
 build/test-android-root-shim: tests/android-root-shim.c \
 		src/android_root_shim.c include/tgcompat/android_root.h | build
-	$(GLIBC_CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 \
+	$(GLIBC_CC) $(CPPFLAGS) $(GLIBC_TEST_CFLAGS) $(WARNINGS) \
+		-Iinclude -std=c11 \
 		tests/android-root-shim.c src/android_root_shim.c -ldl -o $@
 
 build/test-exec-shim-driver: tests/exec-shim-driver.c | build
-	$(GLIBC_CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -std=c11 $< -o $@
+	$(GLIBC_CC) $(CPPFLAGS) $(GLIBC_TEST_CFLAGS) $(WARNINGS) \
+		-std=c11 $< -o $@
 
 build/test-exec-shim-target: tests/exec-shim-target.c | build
-	$(GLIBC_CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -std=c11 $< \
+	$(GLIBC_CC) $(CPPFLAGS) $(GLIBC_TEST_CFLAGS) $(WARNINGS) \
+		-std=c11 $< \
 		-Wl,--dynamic-linker=/no/tgcompat-ld.so -o $@
 
 build/test-sem-store: tests/sem-store.c build/sem_store.o | build
