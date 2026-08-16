@@ -34,7 +34,7 @@
 
 ## Milestone 3: native Steam client
 
-- [ ] Inventory the ARM64 client's library and path requirements
+- [x] Inventory the ARM64 bootstrap and CEF library/path requirements
 - [ ] Launch updater/client directly through the patched glibc loader
 - [ ] Preserve the existing authenticated state without copying secrets into
       logs or the repository
