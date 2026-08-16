@@ -120,7 +120,12 @@ if ((run_checks != 0)); then
     make -C "$repo_dir" -j"$jobs" \
         "CC=$compiler" "AR=$archiver" \
         "CFLAGS=$release_cflags $cpu_flag" \
-        "LDFLAGS=$release_ldflags" check
+        "LDFLAGS=$release_ldflags" all
+    # Keep execution outside a parallel GNU make jobserver. Termux make 4.4.1
+    # under Android 16/Scudo corrupted its own heap after two SIGSYS-denied
+    # probe children, even though every recipe had completed successfully.
+    "$repo_dir/scripts/run-probes.sh" --no-build
+    env -u MAKEFLAGS make -C "$repo_dir" -j1 check-broker
     "$stripper" --strip-unneeded "$repo_dir/build/tgcompatd"
 fi
 

@@ -149,6 +149,11 @@ tunes for kernel-reported CPU features by default:
 scripts/build-release.sh --native --check
 ```
 
+The helper parallelizes compilation but runs Android capability probes and the
+broker gate outside the parallel GNU make jobserver. This avoids a reproduced
+Termux make 4.4.1/Scudo self-crash after `SIGSYS` probe children; it does not
+weaken any test.
+
 Use `--portable` for a redistributable binary. Published binaries deliberately
 do not assume one ARM core design. On heterogeneous AArch64 Android devices the
 helper deliberately avoids `-mcpu=native`: Clang can select the largest core
