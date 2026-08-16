@@ -12,8 +12,8 @@ usage() {
     cat <<'EOF'
 Usage: scripts/build-release.sh [--native|--portable] [--check] [--jobs N]
 
-Builds the broker and static glibc client with LTO. Native mode tunes for the
-current device; portable mode is suitable for redistribution.
+Builds the broker, glibc execution shim, and static client with LTO. Native
+mode tunes for the current device; portable mode is redistributable.
 EOF
 }
 

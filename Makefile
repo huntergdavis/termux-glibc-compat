@@ -1,5 +1,5 @@
 CC ?= cc
-GLIBC_CC ?= $(CC)
+GLIBC_CC ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),grun -s gcc,$(CC))
 AR ?= ar
 CFLAGS ?= -O2 -g
 CPPFLAGS ?=
@@ -37,7 +37,8 @@ TESTS := build/test-sem-store build/test-protocol build/test-broker-dispatch \
 .PHONY: all benchmark check check-broker check-exec-shim clean exec-shim \
 	release
 
-all: $(PROBES) build/tgcompatd build/libtgcompat-client.a $(TESTS)
+all: $(PROBES) build/tgcompatd build/libtgcompat-client.a \
+	build/libtgcompat-exec.so $(TESTS)
 
 build:
 	mkdir -p $@
@@ -141,9 +142,10 @@ release:
 	$(MAKE) clean
 	$(MAKE) CFLAGS="$(RELEASE_CFLAGS) $(RELEASE_CPU_FLAGS)" \
 		LDFLAGS="$(RELEASE_LDFLAGS)" build/tgcompatd \
-		build/libtgcompat-client.a build/benchmark-broker-roundtrip
-	$(STRIP) --strip-unneeded build/tgcompatd \
+		build/libtgcompat-client.a build/libtgcompat-exec.so \
 		build/benchmark-broker-roundtrip
+	$(STRIP) --strip-unneeded build/tgcompatd \
+		build/libtgcompat-exec.so build/benchmark-broker-roundtrip
 
 check: all check-exec-shim
 	./scripts/run-probes.sh --no-build
