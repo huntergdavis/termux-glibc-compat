@@ -79,3 +79,17 @@ The script starts the native broker only when needed, verifies the package and
 loader layout, prints the package hash and dependency resolution, runs the
 complete public semaphore probe, then removes only its validated temporary
 directory. Existing Steam client/config files are outside its scope.
+
+After that test passes, stage the exact package in a content-addressed,
+user-owned directory:
+
+```sh
+integration/termux-glibc/stage-extracted-package.sh \
+  /absolute/path/to/glibc_2.44_aarch64.deb
+```
+
+This repeats the black-box test, extracts the package beneath
+`~/.local/share/tgcompat/glibc/<sha256>`, and atomically points this project's
+`current` selector at it. The selector is not the active Termux glibc prefix;
+the installed package and Steam tree remain untouched. The printed
+`candidate_loader` path is the explicit loader input for native experiments.
