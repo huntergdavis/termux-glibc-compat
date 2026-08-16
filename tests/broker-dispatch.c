@@ -27,6 +27,14 @@ static void request_init(struct tgc_protocol_packet *request, uint16_t opcode,
     request->header.payload_length = payload_length;
 }
 
+static struct tgc_broker_actor actor(int32_t pid)
+{
+    return (struct tgc_broker_actor){
+        .pid = pid,
+        .identity = {.uid = 1000, .gid = 1000},
+    };
+}
+
 int main(void)
 {
     int failed = 0;
@@ -36,7 +44,7 @@ int main(void)
     CHECK(store != NULL);
 
     request_init(&request, TGC_OPCODE_PING, 1, 0);
-    CHECK(tgc_broker_dispatch(store, &request, 400, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(400), &response) == 0);
     CHECK(response.header.kind == TGC_PROTOCOL_RESPONSE);
     CHECK(response.header.request_id == 1 && response.header.result == 0);
 
@@ -44,7 +52,7 @@ int main(void)
     tgc_wire_put_i32(request.payload, 1234);
     tgc_wire_put_i32(request.payload + 4, 2);
     tgc_wire_put_u32(request.payload + 8, TGC_IPC_CREAT | 0600U);
-    CHECK(tgc_broker_dispatch(store, &request, 400, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(400), &response) == 0);
     int semid = response.header.result;
     CHECK(semid > 0);
 
@@ -53,13 +61,13 @@ int main(void)
     tgc_wire_put_u32(request.payload + 4, 2);
     tgc_wire_put_u16(request.payload + 8, 3);
     tgc_wire_put_u16(request.payload + 10, 4);
-    CHECK(tgc_broker_dispatch(store, &request, 500, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(500), &response) == 0);
     CHECK(response.header.result == 0);
 
     request_init(&request, TGC_OPCODE_GETALL, 4, 8);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 2);
-    CHECK(tgc_broker_dispatch(store, &request, 500, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(500), &response) == 0);
     CHECK(response.header.result == 0 && response.header.payload_length == 8);
     CHECK(tgc_wire_get_u32(response.payload) == 2);
     CHECK(tgc_wire_get_u16(response.payload + 4) == 3);
@@ -72,29 +80,29 @@ int main(void)
     tgc_wire_put_i16(request.payload + 10, -2);
     tgc_wire_put_u16(request.payload + 12, 0);
     tgc_wire_put_u16(request.payload + 14, 0);
-    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(600), &response) == 0);
     CHECK(response.header.result == 0);
 
     request_init(&request, TGC_OPCODE_GETVAL, 6, 8);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 0);
-    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(600), &response) == 0);
     CHECK(response.header.result == 1);
 
     request_init(&request, TGC_OPCODE_GETPID, 7, 8);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 0);
-    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(600), &response) == 0);
     CHECK(response.header.result == 600);
 
     request.header.payload_length = 7;
-    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(600), &response) == 0);
     CHECK(response.header.result == -EMSGSIZE);
     CHECK(response.header.payload_length == 0);
 
     request_init(&request, TGC_OPCODE_REMOVE, 8, 4);
     tgc_wire_put_i32(request.payload, semid);
-    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, actor(600), &response) == 0);
     CHECK(response.header.result == 0);
 
 done:

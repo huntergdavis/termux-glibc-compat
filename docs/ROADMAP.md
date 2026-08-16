@@ -16,9 +16,10 @@
 - [x] Atomic in-memory `semop` evaluation and blocking/`IPC_NOWAIT` outcomes
 - [x] Expose the completed state-core operations through the broker dispatcher
 - [x] Broker-side blocking queues and wakeups
-- [ ] `GETPID`, `GETNCNT`, and `GETZCNT`
-- [ ] `semtimedop` using monotonic deadlines
-- [ ] `IPC_RMID` and disconnected-client cleanup
+- [x] `GETPID`, `GETNCNT`, and `GETZCNT`
+- [x] Semaphore owner/mode/time metadata plus `IPC_INFO` and `SEM_INFO`
+- [x] `semtimedop` using monotonic deadlines
+- [x] `IPC_RMID` and disconnected-waiter cleanup
 - [ ] `SEM_UNDO` process-exit behavior
 
 ## Milestone 2: Termux glibc integration

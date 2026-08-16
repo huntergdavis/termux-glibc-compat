@@ -66,6 +66,22 @@ int main(void)
 
     int semid = tgc_client_semget(&client, 9876, 2, TGC_IPC_CREAT | 0600);
     CHECK(semid > 0);
+    struct tgc_sem_metadata metadata;
+    CHECK(tgc_client_stat(&client, semid, &metadata) == 0);
+    CHECK(metadata.key == 9876 && metadata.uid == geteuid() &&
+          metadata.gid == getegid() && metadata.mode == 0600 &&
+          metadata.nsems == 2 && metadata.otime == 0);
+    CHECK(tgc_client_set_metadata(&client, semid, geteuid(), getegid(), 0640) ==
+          0);
+    CHECK(tgc_client_stat(&client, semid, &metadata) == 0);
+    CHECK(metadata.mode == 0640);
+    struct tgc_sem_info info;
+    CHECK(tgc_client_info(&client, 0, &info) >= 0);
+    CHECK(info.semmni == TGC_SEM_MAX_SETS &&
+          info.semmsl == TGC_SEM_MAX_PER_SET &&
+          info.semvmx == TGC_SEM_MAX_VALUE);
+    CHECK(tgc_client_info(&client, 1, &info) >= 0);
+    CHECK(info.semusz == 1 && info.semaem == 2);
     uint16_t set_values[] = {3, 4};
     CHECK(tgc_client_setall(&client, semid, set_values, 2) == 0);
     uint16_t get_values[] = {0, 0};
@@ -86,6 +102,17 @@ int main(void)
         .sem_flg = TGC_IPC_NOWAIT,
     };
     CHECK(tgc_client_semop(&client, semid, &blocked_nowait, 1) == -EAGAIN);
+    CHECK(tgc_client_getncnt(&client, semid, 0) == 0);
+    CHECK(tgc_client_getzcnt(&client, semid, 0) == 0);
+    CHECK(tgc_client_semtimedop(&client, semid, &blocked_nowait, 1,
+                                1000000) == -EAGAIN);
+    const struct tgc_sem_op blocked_timed = {
+        .sem_num = 0,
+        .sem_op = -2,
+        .sem_flg = 0,
+    };
+    CHECK(tgc_client_semtimedop(&client, semid, &blocked_timed, 1,
+                                20000000) == -EAGAIN);
 
     child_pid = fork();
     CHECK(child_pid >= 0);

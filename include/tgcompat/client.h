@@ -31,11 +31,22 @@ int tgc_client_getval(struct tgc_client *client, int semid, size_t semnum);
 int tgc_client_setval(struct tgc_client *client, int semid, size_t semnum,
                       unsigned int value);
 int tgc_client_getpid(struct tgc_client *client, int semid, size_t semnum);
+int tgc_client_getncnt(struct tgc_client *client, int semid, size_t semnum);
+int tgc_client_getzcnt(struct tgc_client *client, int semid, size_t semnum);
 int tgc_client_getall(struct tgc_client *client, int semid, uint16_t *values,
                       size_t count);
 int tgc_client_setall(struct tgc_client *client, int semid,
                       const uint16_t *values, size_t count);
 int tgc_client_semop(struct tgc_client *client, int semid,
                      const struct tgc_sem_op *operations, size_t count);
+int tgc_client_semtimedop(struct tgc_client *client, int semid,
+                          const struct tgc_sem_op *operations, size_t count,
+                          int64_t timeout_nanoseconds);
+int tgc_client_stat(struct tgc_client *client, int semid,
+                    struct tgc_sem_metadata *metadata);
+int tgc_client_set_metadata(struct tgc_client *client, int semid,
+                            uint32_t uid, uint32_t gid, uint32_t mode);
+int tgc_client_info(struct tgc_client *client, int dynamic,
+                    struct tgc_sem_info *info);
 
 #endif

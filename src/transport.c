@@ -162,8 +162,9 @@ int tgc_transport_connect(const char *socket_path, uid_t expected_uid)
         (void)close(socket_fd);
         return -saved_errno;
     }
-    pid_t server_pid = 0;
-    result = tgc_transport_authenticate(socket_fd, expected_uid, &server_pid);
+    struct tgc_peer_credentials credentials = {0};
+    result = tgc_transport_get_credentials(socket_fd, expected_uid,
+                                           &credentials);
     if (result != 0) {
         (void)close(socket_fd);
         return result;
@@ -177,17 +178,38 @@ int tgc_transport_authenticate(int socket_fd, uid_t expected_uid,
     if (socket_fd < 0 || peer_pid == NULL) {
         return -EINVAL;
     }
-    struct ucred credentials;
-    socklen_t length = sizeof(credentials);
-    if (getsockopt(socket_fd, SOL_SOCKET, SO_PEERCRED, &credentials, &length) !=
+    struct tgc_peer_credentials credentials = {0};
+    int result = tgc_transport_get_credentials(socket_fd, expected_uid,
+                                               &credentials);
+    if (result != 0) {
+        return result;
+    }
+    *peer_pid = credentials.pid;
+    return 0;
+}
+
+int tgc_transport_get_credentials(int socket_fd, uid_t expected_uid,
+                                  struct tgc_peer_credentials *credentials)
+{
+    if (socket_fd < 0 || credentials == NULL) {
+        return -EINVAL;
+    }
+    struct ucred native_credentials;
+    socklen_t length = sizeof(native_credentials);
+    if (getsockopt(socket_fd, SOL_SOCKET, SO_PEERCRED, &native_credentials,
+                   &length) !=
         0) {
         return -errno;
     }
-    if (length != sizeof(credentials) || credentials.pid <= 0 ||
-        credentials.uid != expected_uid) {
+    if (length != sizeof(native_credentials) || native_credentials.pid <= 0 ||
+        native_credentials.uid != expected_uid) {
         return -EACCES;
     }
-    *peer_pid = credentials.pid;
+    *credentials = (struct tgc_peer_credentials){
+        .pid = native_credentials.pid,
+        .uid = native_credentials.uid,
+        .gid = native_credentials.gid,
+    };
     return 0;
 }
 

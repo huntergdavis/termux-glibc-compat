@@ -60,12 +60,14 @@ maximum payload is 8192 bytes, enough for the bounded 512-entry `SETALL` and
 `SEMOP` messages without unbounded allocation.
 
 Version 1 exposes ping, `semget`, removal, `GETVAL`, `SETVAL`, `GETPID`,
-`GETALL`, `SETALL`, and atomic `semop` evaluation. Integer encoding is manual
-rather than a cast of C structures, so compiler padding and host alignment are
-not protocol state. Every variable array includes a count and must match the
-header length exactly; operation records include a reserved field that must be
-zero. The dispatcher is independent of Unix sockets so malformed payloads are
-covered by ordinary unit tests before transport or concurrency is involved.
+`GETNCNT`, `GETZCNT`, `GETALL`, `SETALL`, metadata get/set, `IPC_INFO`,
+`SEM_INFO`, atomic `semop`, and monotonic `semtimedop`. Integer encoding is
+manual rather than a cast of C structures, so compiler padding and host
+alignment are not protocol state. Every variable array includes a count and
+must match the header length exactly; operation records include a reserved
+field that must be zero. The dispatcher is independent of Unix sockets so
+malformed payloads are covered by ordinary unit tests before transport or
+concurrency is involved.
 
 The broker derives the operation PID from Linux `SO_PEERCRED`; mutating
 requests do not carry a caller-controlled PID. The daemon refuses relative or
@@ -79,8 +81,9 @@ behind one broker mutex, while blocked `semop` requests enter a FIFO queue per
 semaphore set and wait on a monotonic condition variable. `SETVAL`, `SETALL`,
 successful operations, and removal broadcast a state change. Only the first
 blocked request for a set retries, preserving queue order; unrelated sets can
-make progress concurrently. A timed peer check removes abandoned waiters when
-a client disconnects.
+make progress concurrently. Waiter counts are updated under the same state
+mutex. Relative timeouts become one monotonic deadline when enqueued, and a
+timed peer check removes abandoned waiters when a client disconnects.
 
 The native client is a caller-owned structure rather than a heap object. One
 instance belongs to one calling thread: after its lazy first connection, the

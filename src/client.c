@@ -175,6 +175,16 @@ int tgc_client_getpid(struct tgc_client *client, int semid, size_t semnum)
     return semnum_call(client, TGC_OPCODE_GETPID, semid, semnum);
 }
 
+int tgc_client_getncnt(struct tgc_client *client, int semid, size_t semnum)
+{
+    return semnum_call(client, TGC_OPCODE_GETNCNT, semid, semnum);
+}
+
+int tgc_client_getzcnt(struct tgc_client *client, int semid, size_t semnum)
+{
+    return semnum_call(client, TGC_OPCODE_GETZCNT, semid, semnum);
+}
+
 int tgc_client_getall(struct tgc_client *client, int semid, uint16_t *values,
                       size_t count)
 {
@@ -221,18 +231,26 @@ int tgc_client_setall(struct tgc_client *client, int semid,
     return scalar_call(client, &request);
 }
 
-int tgc_client_semop(struct tgc_client *client, int semid,
-                     const struct tgc_sem_op *operations, size_t count)
+static int semop_call(struct tgc_client *client, int semid,
+                      const struct tgc_sem_op *operations, size_t count,
+                      int timed, int64_t timeout_nanoseconds)
 {
-    if (operations == NULL || count == 0 || count > TGC_SEM_MAX_PER_SET) {
+    if (operations == NULL || count == 0 || count > TGC_SEM_MAX_PER_SET ||
+        (timed != 0 && timeout_nanoseconds < 0)) {
         return -EINVAL;
     }
     struct tgc_protocol_packet request;
-    request_init(&request, TGC_OPCODE_SEMOP, (uint32_t)(8 + (count * 8)));
+    uint32_t prefix_size = timed != 0 ? 16U : 8U;
+    request_init(&request,
+                 timed != 0 ? TGC_OPCODE_SEMTIMEDOP : TGC_OPCODE_SEMOP,
+                 (uint32_t)(prefix_size + (count * 8)));
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, (uint32_t)count);
+    if (timed != 0) {
+        tgc_wire_put_i64(request.payload + 8, timeout_nanoseconds);
+    }
     for (size_t i = 0; i < count; ++i) {
-        uint8_t *wire = request.payload + 8 + (i * 8);
+        uint8_t *wire = request.payload + prefix_size + (i * 8);
         tgc_wire_put_u16(wire, operations[i].sem_num);
         tgc_wire_put_i16(wire + 2, operations[i].sem_op);
         tgc_wire_put_u16(wire + 4, operations[i].sem_flg);
@@ -240,4 +258,100 @@ int tgc_client_semop(struct tgc_client *client, int semid,
     }
     int result = scalar_call(client, &request);
     return result == TGC_SEM_OP_BLOCKED ? -EPROTO : result;
+}
+
+int tgc_client_semop(struct tgc_client *client, int semid,
+                     const struct tgc_sem_op *operations, size_t count)
+{
+    return semop_call(client, semid, operations, count, 0, 0);
+}
+
+int tgc_client_semtimedop(struct tgc_client *client, int semid,
+                          const struct tgc_sem_op *operations, size_t count,
+                          int64_t timeout_nanoseconds)
+{
+    return semop_call(client, semid, operations, count, 1,
+                      timeout_nanoseconds);
+}
+
+int tgc_client_stat(struct tgc_client *client, int semid,
+                    struct tgc_sem_metadata *metadata)
+{
+    if (metadata == NULL) {
+        return -EINVAL;
+    }
+    struct tgc_protocol_packet request;
+    request_init(&request, TGC_OPCODE_STAT, 4);
+    tgc_wire_put_i32(request.payload, semid);
+    struct tgc_protocol_packet response;
+    int result = exchange(client, &request, &response);
+    if (result != 0) {
+        return result;
+    }
+    if (response.header.result != 0) {
+        return response.header.result;
+    }
+    if (response.header.payload_length != 56 ||
+        tgc_wire_get_u32(response.payload + 28) != 0 ||
+        tgc_wire_get_u32(response.payload + 52) != 0) {
+        tgc_client_close(client);
+        return -EPROTO;
+    }
+    *metadata = (struct tgc_sem_metadata){
+        .key = tgc_wire_get_i32(response.payload),
+        .uid = tgc_wire_get_u32(response.payload + 4),
+        .gid = tgc_wire_get_u32(response.payload + 8),
+        .cuid = tgc_wire_get_u32(response.payload + 12),
+        .cgid = tgc_wire_get_u32(response.payload + 16),
+        .mode = tgc_wire_get_u32(response.payload + 20),
+        .nsems = tgc_wire_get_u32(response.payload + 24),
+        .otime = tgc_wire_get_i64(response.payload + 32),
+        .ctime = tgc_wire_get_i64(response.payload + 40),
+        .sequence = tgc_wire_get_u32(response.payload + 48),
+    };
+    return 0;
+}
+
+int tgc_client_set_metadata(struct tgc_client *client, int semid,
+                            uint32_t uid, uint32_t gid, uint32_t mode)
+{
+    struct tgc_protocol_packet request;
+    request_init(&request, TGC_OPCODE_SETMETA, 16);
+    tgc_wire_put_i32(request.payload, semid);
+    tgc_wire_put_u32(request.payload + 4, uid);
+    tgc_wire_put_u32(request.payload + 8, gid);
+    tgc_wire_put_u32(request.payload + 12, mode);
+    return scalar_call(client, &request);
+}
+
+int tgc_client_info(struct tgc_client *client, int dynamic,
+                    struct tgc_sem_info *info)
+{
+    if (info == NULL || (dynamic != 0 && dynamic != 1)) {
+        return -EINVAL;
+    }
+    struct tgc_protocol_packet request;
+    request_init(&request, TGC_OPCODE_INFO, 4);
+    tgc_wire_put_u32(request.payload, (uint32_t)dynamic);
+    struct tgc_protocol_packet response;
+    int result = exchange(client, &request, &response);
+    if (result != 0) {
+        return result;
+    }
+    if (response.header.result < 0) {
+        return response.header.result;
+    }
+    if (response.header.payload_length != 40) {
+        tgc_client_close(client);
+        return -EPROTO;
+    }
+    int32_t *fields[] = {
+        &info->semmap, &info->semmni, &info->semmns, &info->semmnu,
+        &info->semmsl, &info->semopm, &info->semume, &info->semusz,
+        &info->semvmx, &info->semaem,
+    };
+    for (size_t i = 0; i < sizeof(fields) / sizeof(fields[0]); ++i) {
+        *fields[i] = tgc_wire_get_i32(response.payload + (i * 4));
+    }
+    return response.header.result;
 }

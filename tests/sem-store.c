@@ -25,6 +25,24 @@ int main(void)
     CHECK(tgc_sem_store_get(store, 1234, 2, 0) == -ENOENT);
     int keyed = tgc_sem_store_get(store, 1234, 2, TGC_IPC_CREAT);
     CHECK(keyed > 0);
+    struct tgc_sem_metadata metadata;
+    CHECK(tgc_sem_store_get_metadata(store, keyed, &metadata) == 0);
+    CHECK(metadata.key == 1234 && metadata.uid == 0 && metadata.gid == 0);
+    CHECK(metadata.cuid == 0 && metadata.cgid == 0);
+    CHECK(metadata.mode == 0 && metadata.nsems == 2);
+    CHECK(metadata.otime == 0 && metadata.ctime > 0 && metadata.sequence > 0);
+    const struct tgc_sem_identity root_identity = {.uid = 0, .gid = 0};
+    CHECK(tgc_sem_store_set_metadata(store, keyed, 0, 0, 0640,
+                                     root_identity) == 0);
+    CHECK(tgc_sem_store_get_metadata(store, keyed, &metadata) == 0);
+    CHECK(metadata.mode == 0640);
+    struct tgc_sem_info info;
+    CHECK(tgc_sem_store_info(store, 0, &info) == 0);
+    CHECK(info.semmni == TGC_SEM_MAX_SETS &&
+          info.semmsl == TGC_SEM_MAX_PER_SET &&
+          info.semvmx == TGC_SEM_MAX_VALUE);
+    CHECK(tgc_sem_store_info(store, 1, &info) == 0);
+    CHECK(info.semusz == 1 && info.semaem == 2);
     CHECK(tgc_sem_store_get(store, 1234, 0, 0) == keyed);
     CHECK(tgc_sem_store_get(store, 1234, -1, 0) == -EINVAL);
     CHECK(tgc_sem_store_get(store, 1234, 3, 0) == -EINVAL);
@@ -66,6 +84,14 @@ int main(void)
     };
     CHECK(tgc_sem_store_tryop(store, keyed, blocked, 2, 606) ==
           TGC_SEM_OP_BLOCKED);
+    struct tgc_sem_wait_reason reason;
+    CHECK(tgc_sem_store_tryop_detail(store, keyed, blocked, 2, 606, &reason) ==
+          TGC_SEM_OP_BLOCKED);
+    CHECK(reason.sem_num == 1 && reason.wait_for_zero == 0);
+    CHECK(tgc_sem_store_adjust_wait_count(store, keyed, 1, 0, 1) == 0);
+    CHECK(tgc_sem_store_get_wait_count(store, keyed, 1, 0) == 1);
+    CHECK(tgc_sem_store_adjust_wait_count(store, keyed, 1, 0, -1) == 0);
+    CHECK(tgc_sem_store_get_wait_count(store, keyed, 1, 0) == 0);
     CHECK(tgc_sem_store_getval(store, keyed, 0) == 1);
     CHECK(tgc_sem_store_getval(store, keyed, 1) == 0);
 
@@ -76,6 +102,8 @@ int main(void)
 
     CHECK(tgc_sem_store_setval(store, keyed, 1, 1, 707) == 0);
     CHECK(tgc_sem_store_tryop(store, keyed, blocked, 2, 808) == 0);
+    CHECK(tgc_sem_store_get_metadata(store, keyed, &metadata) == 0);
+    CHECK(metadata.otime > 0);
     CHECK(tgc_sem_store_getval(store, keyed, 0) == 0);
     CHECK(tgc_sem_store_getval(store, keyed, 1) == 0);
     CHECK(tgc_sem_store_getpid(store, keyed, 0) == 808);

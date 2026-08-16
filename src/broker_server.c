@@ -13,6 +13,11 @@
 
 struct tgc_waiter {
     int semid;
+    uint16_t semnum;
+    uint16_t wait_for_zero;
+    int counted;
+    int has_deadline;
+    struct timespec deadline;
     struct tgc_waiter *next;
 };
 
@@ -151,7 +156,48 @@ static int peer_has_closed(int socket_fd)
            errno != EINTR;
 }
 
-static int wait_for_state_change(struct tgc_broker *broker)
+static int compare_timespec(const struct timespec *left,
+                            const struct timespec *right)
+{
+    if (left->tv_sec != right->tv_sec) {
+        return left->tv_sec < right->tv_sec ? -1 : 1;
+    }
+    return left->tv_nsec == right->tv_nsec
+               ? 0
+               : (left->tv_nsec < right->tv_nsec ? -1 : 1);
+}
+
+static int initialize_deadline(const struct tgc_protocol_packet *request,
+                               struct tgc_waiter *waiter)
+{
+    if (request->header.opcode != TGC_OPCODE_SEMTIMEDOP) {
+        return 0;
+    }
+    int64_t timeout_ns = tgc_wire_get_i64(request->payload + 8);
+    if (timeout_ns < 0 || clock_gettime(CLOCK_MONOTONIC, &waiter->deadline) !=
+                              0) {
+        return timeout_ns < 0 ? -EINVAL : -errno;
+    }
+    int64_t seconds = timeout_ns / 1000000000LL;
+    long nanoseconds = (long)(timeout_ns % 1000000000LL);
+    if (seconds > INT_MAX || waiter->deadline.tv_sec > INT_MAX - seconds) {
+        waiter->deadline.tv_sec = INT_MAX;
+        waiter->deadline.tv_nsec = 999999999L;
+    } else {
+        waiter->deadline.tv_sec += (time_t)seconds;
+        waiter->deadline.tv_nsec += nanoseconds;
+        if (waiter->deadline.tv_nsec >= 1000000000L) {
+            waiter->deadline.tv_sec += 1;
+            waiter->deadline.tv_nsec -= 1000000000L;
+        }
+    }
+    waiter->has_deadline = 1;
+    return 0;
+}
+
+static int wait_for_state_change(struct tgc_broker *broker,
+                                 const struct tgc_waiter *waiter,
+                                 int *operation_timed_out)
 {
     struct timespec deadline;
     if (clock_gettime(CLOCK_MONOTONIC, &deadline) != 0) {
@@ -162,14 +208,42 @@ static int wait_for_state_change(struct tgc_broker *broker)
         deadline.tv_sec += 1;
         deadline.tv_nsec -= 1000000000L;
     }
+    if (waiter->has_deadline != 0 &&
+        compare_timespec(&waiter->deadline, &deadline) < 0) {
+        deadline = waiter->deadline;
+    }
     int result = pthread_cond_timedwait(&broker->state_changed, &broker->mutex,
                                         &deadline);
-    return result == 0 || result == ETIMEDOUT ? 0 : -result;
+    if (result != 0 && result != ETIMEDOUT) {
+        return -result;
+    }
+    *operation_timed_out = 0;
+    if (waiter->has_deadline != 0) {
+        struct timespec now;
+        if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+            return -errno;
+        }
+        *operation_timed_out =
+            compare_timespec(&now, &waiter->deadline) >= 0;
+    }
+    return 0;
+}
+
+static void finish_waiter(struct tgc_broker *broker,
+                          struct tgc_waiter *waiter)
+{
+    remove_waiter(broker, waiter);
+    if (waiter->counted != 0) {
+        (void)tgc_sem_store_adjust_wait_count(
+            broker->store, waiter->semid, waiter->semnum,
+            waiter->wait_for_zero, -1);
+        waiter->counted = 0;
+    }
 }
 
 static int dispatch_request(struct tgc_broker *broker, int socket_fd,
                             const struct tgc_protocol_packet *request,
-                            int32_t peer_pid,
+                            struct tgc_broker_actor actor,
                             struct tgc_protocol_packet *response)
 {
     int result = pthread_mutex_lock(&broker->mutex);
@@ -177,12 +251,13 @@ static int dispatch_request(struct tgc_broker *broker, int socket_fd,
         return -result;
     }
 
-    result = tgc_broker_dispatch(broker->store, request, peer_pid, response);
+    result = tgc_broker_dispatch(broker->store, request, actor, response);
     if (result != 0) {
         (void)pthread_mutex_unlock(&broker->mutex);
         return result;
     }
-    if (request->header.opcode != TGC_OPCODE_SEMOP ||
+    if ((request->header.opcode != TGC_OPCODE_SEMOP &&
+         request->header.opcode != TGC_OPCODE_SEMTIMEDOP) ||
         response->header.result != TGC_SEM_OP_BLOCKED) {
         if (operation_changed_state(request, response)) {
             (void)pthread_cond_broadcast(&broker->state_changed);
@@ -193,33 +268,68 @@ static int dispatch_request(struct tgc_broker *broker, int socket_fd,
 
     struct tgc_waiter waiter = {
         .semid = tgc_wire_get_i32(request->payload),
+        .semnum = response->header.payload_length == 8
+                      ? tgc_wire_get_u16(response->payload)
+                      : UINT16_MAX,
+        .wait_for_zero = response->header.payload_length == 8
+                             ? tgc_wire_get_u16(response->payload + 2)
+                             : UINT16_MAX,
+        .counted = 0,
+        .has_deadline = 0,
         .next = NULL,
     };
+    if (response->header.payload_length != 8 || waiter.wait_for_zero > 1 ||
+        tgc_wire_get_u32(response->payload + 4) != 0) {
+        (void)pthread_mutex_unlock(&broker->mutex);
+        return -EPROTO;
+    }
+    result = initialize_deadline(request, &waiter);
+    if (result != 0) {
+        (void)pthread_mutex_unlock(&broker->mutex);
+        return result;
+    }
+    result = tgc_sem_store_adjust_wait_count(
+        broker->store, waiter.semid, waiter.semnum, waiter.wait_for_zero, 1);
+    if (result != 0) {
+        (void)pthread_mutex_unlock(&broker->mutex);
+        return result;
+    }
+    waiter.counted = 1;
     enqueue_waiter(broker, &waiter);
     for (;;) {
         if (peer_has_closed(socket_fd)) {
-            remove_waiter(broker, &waiter);
+            finish_waiter(broker, &waiter);
             (void)pthread_cond_broadcast(&broker->state_changed);
             (void)pthread_mutex_unlock(&broker->mutex);
             return 0;
         }
         if (waiter_is_first_for_set(broker, &waiter)) {
-            result = tgc_broker_dispatch(broker->store, request, peer_pid,
+            result = tgc_broker_dispatch(broker->store, request, actor,
                                          response);
             if (result != 0 ||
                 response->header.result != TGC_SEM_OP_BLOCKED) {
-                remove_waiter(broker, &waiter);
+                finish_waiter(broker, &waiter);
                 (void)pthread_cond_broadcast(&broker->state_changed);
                 (void)pthread_mutex_unlock(&broker->mutex);
                 return result;
             }
         }
-        result = wait_for_state_change(broker);
+        int operation_timed_out = 0;
+        result = wait_for_state_change(broker, &waiter,
+                                       &operation_timed_out);
         if (result != 0) {
-            remove_waiter(broker, &waiter);
+            finish_waiter(broker, &waiter);
             (void)pthread_cond_broadcast(&broker->state_changed);
             (void)pthread_mutex_unlock(&broker->mutex);
             return result;
+        }
+        if (operation_timed_out != 0) {
+            finish_waiter(broker, &waiter);
+            response->header.result = -EAGAIN;
+            response->header.payload_length = 0;
+            (void)pthread_cond_broadcast(&broker->state_changed);
+            (void)pthread_mutex_unlock(&broker->mutex);
+            return 0;
         }
     }
 }
@@ -231,14 +341,23 @@ int tgc_broker_serve_connection(struct tgc_broker *broker, int socket_fd,
         return -EINVAL;
     }
 
-    pid_t peer_pid = 0;
-    int result = tgc_transport_authenticate(socket_fd, expected_uid, &peer_pid);
+    struct tgc_peer_credentials credentials;
+    int result = tgc_transport_get_credentials(socket_fd, expected_uid,
+                                               &credentials);
     if (result != 0) {
         return result;
     }
-    if (peer_pid > INT32_MAX) {
+    if (credentials.pid > INT32_MAX || credentials.uid > UINT32_MAX ||
+        credentials.gid > UINT32_MAX) {
         return -EOVERFLOW;
     }
+    const struct tgc_broker_actor actor = {
+        .pid = (int32_t)credentials.pid,
+        .identity = {
+            .uid = (uint32_t)credentials.uid,
+            .gid = (uint32_t)credentials.gid,
+        },
+    };
 
     for (;;) {
         struct tgc_protocol_packet request;
@@ -255,7 +374,7 @@ int tgc_broker_serve_connection(struct tgc_broker *broker, int socket_fd,
 
         struct tgc_protocol_packet response;
         result = dispatch_request(broker, socket_fd, &request,
-                                  (int32_t)peer_pid, &response);
+                                  actor, &response);
         if (result != 0) {
             return result;
         }

@@ -23,6 +23,12 @@ enum tgc_protocol_opcode {
     TGC_OPCODE_GETALL = 7,
     TGC_OPCODE_SETALL = 8,
     TGC_OPCODE_SEMOP = 9,
+    TGC_OPCODE_GETNCNT = 10,
+    TGC_OPCODE_GETZCNT = 11,
+    TGC_OPCODE_STAT = 12,
+    TGC_OPCODE_SETMETA = 13,
+    TGC_OPCODE_SEMTIMEDOP = 14,
+    TGC_OPCODE_INFO = 15,
 };
 
 struct tgc_protocol_header {
@@ -61,9 +67,13 @@ void tgc_wire_put_u16(uint8_t *output, uint16_t value);
 void tgc_wire_put_u32(uint8_t *output, uint32_t value);
 void tgc_wire_put_i16(uint8_t *output, int16_t value);
 void tgc_wire_put_i32(uint8_t *output, int32_t value);
+void tgc_wire_put_u64(uint8_t *output, uint64_t value);
+void tgc_wire_put_i64(uint8_t *output, int64_t value);
 uint16_t tgc_wire_get_u16(const uint8_t *input);
 uint32_t tgc_wire_get_u32(const uint8_t *input);
 int16_t tgc_wire_get_i16(const uint8_t *input);
 int32_t tgc_wire_get_i32(const uint8_t *input);
+uint64_t tgc_wire_get_u64(const uint8_t *input);
+int64_t tgc_wire_get_i64(const uint8_t *input);
 
 #endif

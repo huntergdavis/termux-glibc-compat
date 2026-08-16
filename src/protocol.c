@@ -28,6 +28,17 @@ void tgc_wire_put_i32(uint8_t *output, int32_t value)
     tgc_wire_put_u32(output, (uint32_t)value);
 }
 
+void tgc_wire_put_u64(uint8_t *output, uint64_t value)
+{
+    tgc_wire_put_u32(output, (uint32_t)value);
+    tgc_wire_put_u32(output + 4, (uint32_t)(value >> 32));
+}
+
+void tgc_wire_put_i64(uint8_t *output, int64_t value)
+{
+    tgc_wire_put_u64(output, (uint64_t)value);
+}
+
 uint16_t tgc_wire_get_u16(const uint8_t *input)
 {
     return (uint16_t)((uint16_t)input[0] | ((uint16_t)input[1] << 8));
@@ -49,6 +60,17 @@ int32_t tgc_wire_get_i32(const uint8_t *input)
     return (int32_t)tgc_wire_get_u32(input);
 }
 
+uint64_t tgc_wire_get_u64(const uint8_t *input)
+{
+    return (uint64_t)tgc_wire_get_u32(input) |
+           ((uint64_t)tgc_wire_get_u32(input + 4) << 32);
+}
+
+int64_t tgc_wire_get_i64(const uint8_t *input)
+{
+    return (int64_t)tgc_wire_get_u64(input);
+}
+
 static int header_is_valid(const struct tgc_protocol_header *header)
 {
     if (header == NULL || header->version != TGC_PROTOCOL_VERSION) {
@@ -59,7 +81,7 @@ static int header_is_valid(const struct tgc_protocol_header *header)
         return -EPROTO;
     }
     if (header->opcode < TGC_OPCODE_PING ||
-        header->opcode > TGC_OPCODE_SEMOP) {
+        header->opcode > TGC_OPCODE_INFO) {
         return -EPROTO;
     }
     if (header->payload_length > TGC_PROTOCOL_MAX_PAYLOAD) {

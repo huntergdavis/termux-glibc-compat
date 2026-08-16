@@ -7,14 +7,19 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+struct tgc_broker_actor {
+    int32_t pid;
+    struct tgc_sem_identity identity;
+};
+
 /*
  * Dispatch one already-framed request. Transport and peer authentication stay
  * outside this boundary so malformed-message behavior is unit-testable.
  */
 int tgc_broker_dispatch(struct tgc_sem_store *store,
                         const struct tgc_protocol_packet *request,
-                        int32_t actor_pid,
-struct tgc_protocol_packet *response);
+                        struct tgc_broker_actor actor,
+                        struct tgc_protocol_packet *response);
 
 struct tgc_broker;
 

@@ -34,6 +34,11 @@ int main(void)
     CHECK(peer_pid == getpid());
     CHECK(tgc_transport_authenticate(sockets[0], geteuid() + 1, &peer_pid) ==
           -EACCES);
+    struct tgc_peer_credentials credentials;
+    CHECK(tgc_transport_get_credentials(sockets[0], geteuid(), &credentials) ==
+          0);
+    CHECK(credentials.pid == getpid() && credentials.uid == geteuid() &&
+          credentials.gid == getegid());
 
     struct tgc_protocol_packet sent;
     memset(&sent, 0, sizeof(sent));

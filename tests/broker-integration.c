@@ -170,7 +170,14 @@ int main(void)
     const struct timespec queue_pause = {.tv_sec = 0, .tv_nsec = 100000000L};
     CHECK(nanosleep(&queue_pause, NULL) == 0);
 
-    request_init(&request, TGC_OPCODE_SETVAL, 7, 12);
+    request_init(&request, TGC_OPCODE_GETNCNT, 7, 8);
+    tgc_wire_put_i32(request.payload, semid);
+    tgc_wire_put_u32(request.payload + 4, 0);
+    CHECK(tgc_transport_send(socket_fd, &request) == 0);
+    CHECK(tgc_transport_receive(socket_fd, &response) == 0);
+    CHECK(response.header.result == 1);
+
+    request_init(&request, TGC_OPCODE_SETVAL, 8, 12);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 0);
     tgc_wire_put_u32(request.payload + 8, 1);
@@ -183,7 +190,14 @@ int main(void)
     waiter_pid = -1;
     CHECK(WIFEXITED(waiter_status) && WEXITSTATUS(waiter_status) == 0);
 
-    request_init(&request, TGC_OPCODE_GETVAL, 8, 8);
+    request_init(&request, TGC_OPCODE_GETVAL, 9, 8);
+    tgc_wire_put_i32(request.payload, semid);
+    tgc_wire_put_u32(request.payload + 4, 0);
+    CHECK(tgc_transport_send(socket_fd, &request) == 0);
+    CHECK(tgc_transport_receive(socket_fd, &response) == 0);
+    CHECK(response.header.result == 0);
+
+    request_init(&request, TGC_OPCODE_GETNCNT, 10, 8);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 0);
     CHECK(tgc_transport_send(socket_fd, &request) == 0);

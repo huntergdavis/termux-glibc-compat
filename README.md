@@ -60,6 +60,8 @@ The first milestone is checked in:
 - a runnable `tgcompatd` Unix-socket broker with mode-0700 runtime-directory
   validation, a mode-0600 socket, and same-UID `SO_PEERCRED` authentication;
 - concurrent client workers and broker-side FIFO `semop` wait/wakeup handling;
+- ownership/mode/timestamp metadata, `GETNCNT`/`GETZCNT`, `IPC_INFO`,
+  `SEM_INFO`, and monotonic `semtimedop` deadlines;
 - a lazy, persistent, per-thread native client API that reconnects safely after
   `fork` and never allocates or reconnects in steady-state calls;
 - an evidence-backed compatibility matrix;
@@ -72,8 +74,8 @@ shared memory pass; robust-list and SysV semaphore calls return `ENOSYS`. This
 confirms that semaphore compatibility is the first implementation target. See
 the [raw result](docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt).
 
-Glibc integration, waiter-count controls, timed operations, and an on-tablet
-native client are the next implementation milestones. See
+Glibc integration, `SEM_UNDO`, and an on-tablet native client are the next
+implementation milestones. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Run the broker

@@ -52,15 +52,25 @@ int main(void)
     tgc_wire_put_u32(wire + 16, TGC_PROTOCOL_MAX_PAYLOAD + 1U);
     CHECK(tgc_protocol_decode_header(wire, &decoded) == -EMSGSIZE);
 
-    uint8_t integers[12] = {0};
+    uint8_t integers[28] = {0};
     tgc_wire_put_u16(integers, 0xabcdU);
     tgc_wire_put_i16(integers + 2, -1234);
     tgc_wire_put_u32(integers + 4, 0x89abcdefU);
     tgc_wire_put_i32(integers + 8, -123456789);
+    tgc_wire_put_u64(integers + 12, UINT64_C(0xfedcba9876543210));
+    tgc_wire_put_i64(integers + 20, INT64_C(-1234567890123456));
     CHECK(tgc_wire_get_u16(integers) == 0xabcdU);
     CHECK(tgc_wire_get_i16(integers + 2) == -1234);
     CHECK(tgc_wire_get_u32(integers + 4) == 0x89abcdefU);
     CHECK(tgc_wire_get_i32(integers + 8) == -123456789);
+    CHECK(tgc_wire_get_u64(integers + 12) ==
+          UINT64_C(0xfedcba9876543210));
+    CHECK(tgc_wire_get_i64(integers + 20) ==
+          INT64_C(-1234567890123456));
+
+    header.opcode = TGC_OPCODE_SEMTIMEDOP;
+    header.payload_length = 16;
+    CHECK(tgc_protocol_encode_header(wire, &header) == 0);
 
     puts("protocol: PASS");
     return EXIT_SUCCESS;
