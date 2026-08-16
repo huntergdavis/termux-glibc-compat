@@ -5,6 +5,7 @@ CFLAGS ?= -O2 -g
 CPPFLAGS ?=
 LDFLAGS ?=
 STRIP ?= strip
+BASH ?= bash
 PROBE_SHM_LIBS ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),\
 	-landroid-shmem,)
 PROBE_SEM_LIBS ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),\
@@ -134,7 +135,7 @@ exec-shim: build/libtgcompat-exec.so
 
 check-exec-shim: build/libtgcompat-exec.so build/test-exec-shim-driver \
 		build/test-exec-shim-target
-	./scripts/test-exec-shim.sh
+	$(BASH) ./scripts/test-exec-shim.sh
 
 release:
 	$(MAKE) clean
