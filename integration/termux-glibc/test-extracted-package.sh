@@ -47,10 +47,25 @@ loader=$candidate_lib/ld-linux-aarch64.so.1
     die 'package does not contain the expected AArch64 Termux glibc layout'
 
 probe=$stage/sysv-semaphore
-compiler=${GLIBC_CC:-$PREFIX/glibc/bin/gcc}
-[[ -x $compiler ]] || die "glibc compiler is unavailable: $compiler"
+if [[ -n ${GLIBC_CC:-} ]]; then
+    compiler_command=("$GLIBC_CC")
+elif [[ $(uname -o 2>/dev/null || true) == Android ]]; then
+    command -v grun >/dev/null 2>&1 ||
+        die 'glibc-runner is required to compile the probe on Android'
+    compiler_command=(grun -s gcc)
+else
+    compiler_command=("$PREFIX/glibc/bin/gcc")
+fi
+compiler=${compiler_command[0]}
+if [[ $compiler == */* ]]; then
+    [[ -x $compiler ]] || die "glibc compiler is unavailable: $compiler"
+else
+    command -v "$compiler" >/dev/null 2>&1 ||
+        die "glibc compiler is unavailable: $compiler"
+fi
 env -u LD_PRELOAD -u LD_LIBRARY_PATH -u GLIBC_LD_LIBRARY_PATH \
-    "$compiler" -O2 -g -Wall -Wextra -Werror -Wpedantic -pthread \
+    "${compiler_command[@]}" \
+    -O2 -g -Wall -Wextra -Werror -Wpedantic -pthread \
     "$repo_dir/probes/sysv-semaphore.c" -o "$probe"
 
 if ! "$broker_repo/scripts/tgcompat-session.sh" status >/dev/null 2>&1; then
