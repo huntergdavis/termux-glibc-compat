@@ -64,3 +64,18 @@ This overlay does not install or replace the tablet's libc. Before a package is
 installed, rollback is simply discarding the dedicated glibc-packages checkout.
 For the first tablet install, keep the downloaded stock package and test through
 an isolated package root before changing the active glibc prefix.
+
+The repository includes that extraction-only gate. It never invokes `dpkg -i`
+or writes below the active glibc prefix: it extracts the `.deb` under `TMPDIR`,
+compiles the public probe with the installed compiler, and invokes the
+candidate loader with an explicit candidate-only library path:
+
+```sh
+integration/termux-glibc/test-extracted-package.sh \
+  /absolute/path/to/glibc_2.44-*.deb
+```
+
+The script starts the native broker only when needed, verifies the package and
+loader layout, prints the package hash and dependency resolution, runs the
+complete public semaphore probe, then removes only its validated temporary
+directory. Existing Steam client/config files are outside its scope.
