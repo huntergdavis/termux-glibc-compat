@@ -145,7 +145,7 @@ release:
 	$(STRIP) --strip-unneeded build/tgcompatd \
 		build/benchmark-broker-roundtrip
 
-check: all
+check: all check-exec-shim
 	./scripts/run-probes.sh --no-build
 	./build/test-sem-store
 	./build/test-protocol
