@@ -1,0 +1,44 @@
+# Roadmap
+
+## Milestone 0: executable baseline
+
+- [x] Strict pthread, robust-list, SysV semaphore, and SysV shared-memory probes
+- [x] Conventional Linux CI
+- [x] Upstream Termux glibc source audit
+- [x] Capture the same probes on the Tab S8+ with a glibc-linked toolchain
+
+## Milestone 1: semaphore protocol
+
+- [ ] Versioned request/response definitions
+- [ ] Same-UID broker startup and peer validation
+- [ ] `semget` and generation-safe IDs
+- [ ] `GETVAL`, `GETALL`, `SETVAL`, and `SETALL`
+- [ ] Atomic `semop`, blocking waiters, `IPC_NOWAIT`, and wakeups
+- [ ] `GETPID`, `GETNCNT`, and `GETZCNT`
+- [ ] `semtimedop` using monotonic deadlines
+- [ ] `IPC_RMID` and disconnected-client cleanup
+- [ ] `SEM_UNDO` process-exit behavior
+
+## Milestone 2: Termux glibc integration
+
+- [ ] Patch glibc's SysV semaphore entry points to the client library
+- [ ] Build through the official `termux/glibc-packages` recipe
+- [ ] Run glibc's `test-sysvsem` plus this repository's black-box suite
+- [ ] Document packaging, rollback, and coexistence with stock glibc
+
+## Milestone 3: native Steam client
+
+- [ ] Inventory the ARM64 client's library and path requirements
+- [ ] Launch updater/client directly through the patched glibc loader
+- [ ] Preserve the existing authenticated state without copying secrets into
+      logs or the repository
+- [ ] Validate D-Bus, X11, audio, networking, and CEF independently
+- [ ] Prove there is no PRoot tracer in the process tree
+
+## Milestone 4: runtime and games
+
+- [ ] Isolate Pressure Vessel namespace/filesystem requirements
+- [ ] Start Proton/FEX outside PRoot or document the remaining boundary
+- [ ] Re-run the Tomb Raider built-in benchmark with matched settings and
+      thermal state
+- [ ] Publish CPU, GPU, memory, frame-time, and correctness comparisons

@@ -1,0 +1,23 @@
+device=Samsung Galaxy Tab S8+ SM-X808U
+compiler=gcc-glibc 14.2.1-1
+runner=glibc-runner 2.0-3
+kernel=Linux 5.10.236-android12-9-32140295-abX808USQSAEZF1 aarch64 GNU/Linux
+libc=glibc 2.42-0
+
+[pthread-basic]
+pthread counter=100000 expected=100000
+RESULT pthread-basic PASS
+
+[robust-list]
+get_robust_list unsupported: errno=38
+RESULT robust-list UNSUPPORTED
+
+[sysv-shm]
+SysV shared memory cross-process transfer: ok
+RESULT sysv-shm PASS
+
+[sysv-semaphore]
+SysV semaphores unsupported: errno=38
+RESULT sysv-semaphore UNSUPPORTED
+
+SUMMARY pass=2 unsupported=2 fail=0
