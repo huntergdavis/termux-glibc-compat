@@ -631,7 +631,7 @@ int tgc_broker_serve_connection(struct tgc_broker *broker, int socket_fd,
         return -EINVAL;
     }
 
-    struct tgc_peer_credentials credentials;
+    struct tgc_peer_credentials credentials = {0};
     int result = tgc_transport_get_credentials(socket_fd, expected_uid,
                                                &credentials);
     if (result != 0) {

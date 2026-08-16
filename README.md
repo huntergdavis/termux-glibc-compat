@@ -133,8 +133,29 @@ For a stripped LTO build:
 make release
 ```
 
-On-device builds may add `RELEASE_CPU_FLAGS=-mcpu=native`; portable published
-binaries deliberately do not assume one ARM core design.
+The production helper selects ThinLTO under Clang, parallelizes the build, and
+tunes for the current CPU by default:
+
+```sh
+scripts/build-release.sh --native --check
+```
+
+Use `--portable` for a redistributable binary. Published binaries deliberately
+do not assume one ARM core design.
+
+The session helper owns a private runtime directory and performs PID/executable
+validation before signaling anything:
+
+```sh
+scripts/tgcompat-session.sh start
+eval "$(scripts/tgcompat-session.sh env)"
+# launch any patched-glibc application here
+scripts/tgcompat-session.sh stop
+```
+
+`scripts/tgcompat-session.sh run COMMAND...` combines startup and environment
+setup. It leaves the broker alive so child processes and subsequent Steam games
+keep the same compatibility service; `stop` shuts it down explicitly.
 
 `build/libtgcompat-client.a` contains the caller-owned persistent client. Its
 public API is [`include/tgcompat/client.h`](include/tgcompat/client.h); negative
