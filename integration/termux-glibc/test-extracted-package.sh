@@ -49,7 +49,8 @@ loader=$candidate_lib/ld-linux-aarch64.so.1
 probe=$stage/sysv-semaphore
 compiler=${GLIBC_CC:-$PREFIX/glibc/bin/gcc}
 [[ -x $compiler ]] || die "glibc compiler is unavailable: $compiler"
-"$compiler" -O2 -g -Wall -Wextra -Werror -Wpedantic -pthread \
+env -u LD_PRELOAD -u LD_LIBRARY_PATH -u GLIBC_LD_LIBRARY_PATH \
+    "$compiler" -O2 -g -Wall -Wextra -Werror -Wpedantic -pthread \
     "$repo_dir/probes/sysv-semaphore.c" -o "$probe"
 
 if ! "$broker_repo/scripts/tgcompat-session.sh" status >/dev/null 2>&1; then
