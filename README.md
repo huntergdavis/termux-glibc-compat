@@ -73,6 +73,9 @@ The first milestone is checked in:
   time ABIs while replacing only the semaphore syscall boundary;
 - a successful real `libc.so` link and public-API probe through that built
   loader against `tgcompatd`;
+- an opt-in, no-copy execution shim that runs unmodified Linux ELF children
+  through the selected loader and preserves `argv[0]` across Steam's imported
+  `execv`, `execvp`, `execvpe`, `execl`, and POSIX-spawn call paths;
 - an evidence-backed compatibility matrix;
 - a no-ptrace architecture for a per-Termux-UID semaphore broker; and
 - a staged path from probes to a patched Termux glibc package and native Steam
@@ -95,6 +98,14 @@ been replaced. The integration overlay and its exact upstream pin are
 documented in
 [`integration/termux-glibc/README.md`](integration/termux-glibc/README.md).
 See also [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+`build/libtgcompat-exec.so` is an execution-boundary helper, not a syscall
+emulator. It reads only the target ELF header at launch time and wraps matching
+AArch64 Linux executables with `TGCOMPAT_LD_SO`; program files are never
+patched or copied. `TGCOMPAT_LIBRARY_PATH` supplies the loader search path and
+`TGCOMPAT_EXEC_DISABLE=1` is a fail-safe bypass. The test fixture gives its
+target a deliberately nonexistent interpreter and verifies direct, PATH-based,
+variadic, and spawned child launches through the real selected loader.
 
 ## Run the broker
 

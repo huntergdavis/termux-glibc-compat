@@ -24,26 +24,38 @@ loader=$(
 )
 [[ $loader == /* && -x $loader ]] || die "invalid host loader: $loader"
 
-if "$driver" "$target" >/dev/null 2>&1; then
-    die 'broken-interpreter fixture unexpectedly ran without the shim'
-fi
+for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
+    mode_target=$target
+    mode_path=$PATH
+    case $mode in
+        execvp|execvpe|posix_spawnp)
+            mode_target=${target##*/}
+            mode_path=${target%/*}:$PATH
+            ;;
+    esac
+    if env PATH="$mode_path" "$driver" "$mode" "$mode_target" \
+            >/dev/null 2>&1; then
+        die "$mode broken-interpreter fixture unexpectedly ran without the shim"
+    fi
 
-output=$(
-    env \
-        LD_PRELOAD="$shim" \
-        TGCOMPAT_LD_SO="$loader" \
-        TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
-        "$driver" "$target"
-)
-[[ $output == 'exec shim target: PASS' ]] ||
-    die "unexpected wrapped output: $output"
+    output=$(
+        env \
+            PATH="$mode_path" \
+            LD_PRELOAD="$shim" \
+            TGCOMPAT_LD_SO="$loader" \
+            TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+            "$driver" "$mode" "$mode_target"
+    )
+    [[ $output == 'exec shim target: PASS' ]] ||
+        die "$mode produced unexpected wrapped output: $output"
+done
 
 if env \
         LD_PRELOAD="$shim" \
         TGCOMPAT_LD_SO="$loader" \
         TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
         TGCOMPAT_EXEC_DISABLE=1 \
-        "$driver" "$target" >/dev/null 2>&1; then
+        "$driver" execve "$target" >/dev/null 2>&1; then
     die 'TGCOMPAT_EXEC_DISABLE did not bypass the shim'
 fi
 
