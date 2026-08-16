@@ -1,5 +1,6 @@
 CC ?= cc
 GLIBC_CC ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),grun -s gcc,$(CC))
+GLIBC_RUN ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),grun -s,)
 AR ?= ar
 CFLAGS ?= -O2 -g
 CPPFLAGS ?=
@@ -39,8 +40,8 @@ TESTS := build/test-sem-store build/test-protocol build/test-broker-dispatch \
 	build/test-transport build/test-transport-security \
 	build/test-broker-integration build/test-client
 
-.PHONY: all benchmark check check-broker check-exec-shim clean exec-shim \
-	release
+.PHONY: all benchmark check check-android-root-shim check-broker \
+	check-exec-shim clean exec-shim release
 
 all: $(PROBES) build/tgcompatd build/libtgcompat-client.a \
 	build/libtgcompat-exec.so build/libtgcompat-android-root.so \
@@ -157,6 +158,10 @@ check-exec-shim: build/libtgcompat-exec.so build/test-exec-shim-driver \
 		build/test-exec-shim-target
 	$(BASH) ./scripts/test-exec-shim.sh
 
+check-android-root-shim: build/libtgcompat-android-root.so \
+		build/test-android-root-shim
+	$(GLIBC_RUN) ./build/test-android-root-shim
+
 release:
 	$(MAKE) clean
 	$(MAKE) CFLAGS="$(RELEASE_CFLAGS) $(RELEASE_CPU_FLAGS)" \
@@ -168,7 +173,7 @@ release:
 		build/libtgcompat-exec.so build/libtgcompat-android-root.so \
 		build/benchmark-broker-roundtrip
 
-check: all check-exec-shim
+check: all check-exec-shim check-android-root-shim
 	./scripts/run-probes.sh --no-build
 	./build/test-sem-store
 	./build/test-protocol
@@ -177,7 +182,6 @@ check: all check-exec-shim
 	./build/test-transport-security
 	./build/test-broker-integration
 	./build/test-client
-	./build/test-android-root-shim
 
 check-broker: $(TESTS)
 	./build/test-sem-store

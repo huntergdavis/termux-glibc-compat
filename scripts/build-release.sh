@@ -130,8 +130,7 @@ if ((run_checks != 0)); then
     # probe children, even though every recipe had completed successfully.
     "$repo_dir/scripts/run-probes.sh" --no-build
     env -u MAKEFLAGS make -C "$repo_dir" -j1 \
-        check-broker check-exec-shim
-    "$repo_dir/build/test-android-root-shim"
+        check-broker check-exec-shim check-android-root-shim
     "$stripper" --strip-unneeded \
         "$repo_dir/build/tgcompatd" \
         "$repo_dir/build/libtgcompat-exec.so" \
