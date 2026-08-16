@@ -1,4 +1,5 @@
 CC ?= cc
+GLIBC_CC ?= $(CC)
 AR ?= ar
 CFLAGS ?= -O2 -g
 CPPFLAGS ?=
@@ -15,6 +16,10 @@ RELEASE_CFLAGS ?= -O3 -DNDEBUG -flto -fno-plt \
 RELEASE_CPU_FLAGS ?=
 RELEASE_LDFLAGS ?= -flto -Wl,-O2,--as-needed,--gc-sections \
 	-Wl,-z,relro,-z,now
+EXEC_SHIM_CFLAGS ?= -O3 -DNDEBUG -fPIC -fvisibility=hidden \
+	-fno-semantic-interposition -ffunction-sections -fdata-sections
+EXEC_SHIM_LDFLAGS ?= -shared -Wl,-O2,--as-needed,--gc-sections \
+	-Wl,-z,relro,-z,now
 
 WARNINGS := -Wall -Wextra -Werror -Wpedantic -Wcast-qual -Wformat=2 \
 	-Wshadow -Wstrict-prototypes
@@ -28,7 +33,8 @@ TESTS := build/test-sem-store build/test-protocol build/test-broker-dispatch \
 	build/test-transport build/test-transport-security \
 	build/test-broker-integration build/test-client
 
-.PHONY: all benchmark check check-broker clean release
+.PHONY: all benchmark check check-broker check-exec-shim clean exec-shim \
+	release
 
 all: $(PROBES) build/tgcompatd build/libtgcompat-client.a $(TESTS)
 
@@ -77,6 +83,17 @@ build/tgcompatd: src/tgcompatd.c $(CORE_OBJECTS) $(SERVER_OBJECTS) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 \
 		$(THREAD_FLAGS) $^ $(LDFLAGS) -o $@
 
+build/libtgcompat-exec.so: src/exec_shim.c | build
+	$(GLIBC_CC) $(CPPFLAGS) $(EXEC_SHIM_CFLAGS) $(WARNINGS) -std=c11 \
+		$< $(EXEC_SHIM_LDFLAGS) -ldl -o $@
+
+build/test-exec-shim-driver: tests/exec-shim-driver.c | build
+	$(GLIBC_CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -std=c11 $< -o $@
+
+build/test-exec-shim-target: tests/exec-shim-target.c | build
+	$(GLIBC_CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -std=c11 $< \
+		-Wl,--dynamic-linker=/no/tgcompat-ld.so -o $@
+
 build/test-sem-store: tests/sem-store.c build/sem_store.o | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 $^ $(LDFLAGS) -o $@
 
@@ -112,6 +129,12 @@ build/benchmark-broker-roundtrip: benchmarks/broker-roundtrip.c \
 
 benchmark: build/benchmark-broker-roundtrip
 	./build/benchmark-broker-roundtrip
+
+exec-shim: build/libtgcompat-exec.so
+
+check-exec-shim: build/libtgcompat-exec.so build/test-exec-shim-driver \
+		build/test-exec-shim-target
+	./scripts/test-exec-shim.sh
 
 release:
 	$(MAKE) clean
