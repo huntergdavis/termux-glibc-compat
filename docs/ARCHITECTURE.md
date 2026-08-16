@@ -67,6 +67,13 @@ header length exactly; operation records include a reserved field that must be
 zero. The dispatcher is independent of Unix sockets so malformed payloads are
 covered by ordinary unit tests before transport or concurrency is involved.
 
+The broker derives the operation PID from Linux `SO_PEERCRED`; mutating
+requests do not carry a caller-controlled PID. The daemon refuses relative or
+overlong socket paths, requires the containing directory to be owned by its
+effective UID with exact mode 0700, creates the socket with mode 0600, and
+never unlinks a pre-existing path during startup. A malformed or truncated
+frame closes only that client connection.
+
 ## Robust lists
 
 The current Termux glibc package removes NPTL robust-list registration and

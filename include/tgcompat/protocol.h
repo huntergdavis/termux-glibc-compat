@@ -46,7 +46,9 @@ struct tgc_protocol_packet {
  *
  * Request result fields and all reserved fields must be zero. Responses carry
  * the state-core return value in result. GETALL is the only version-1 response
- * with a payload: count:u32 followed by count value:u16 entries.
+ * with a payload: count:u32 followed by count value:u16 entries. Operations
+ * record the caller PID from authenticated socket credentials, never from a
+ * client-supplied field.
  */
 int tgc_protocol_encode_header(
     uint8_t output[TGC_PROTOCOL_HEADER_SIZE],

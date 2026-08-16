@@ -10,7 +10,7 @@
 ## Milestone 1: semaphore protocol
 
 - [x] Versioned request/response definitions
-- [ ] Same-UID broker startup and peer validation
+- [x] Same-UID broker startup and peer validation
 - [x] In-memory `semget`, key lookup, and generation-safe IDs
 - [x] In-memory `GETVAL`, `GETALL`, `SETVAL`, and atomic `SETALL`
 - [x] Atomic in-memory `semop` evaluation and blocking/`IPC_NOWAIT` outcomes

@@ -36,7 +36,7 @@ int main(void)
     CHECK(store != NULL);
 
     request_init(&request, TGC_OPCODE_PING, 1, 0);
-    CHECK(tgc_broker_dispatch(store, &request, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, 400, &response) == 0);
     CHECK(response.header.kind == TGC_PROTOCOL_RESPONSE);
     CHECK(response.header.request_id == 1 && response.header.result == 0);
 
@@ -44,53 +44,57 @@ int main(void)
     tgc_wire_put_i32(request.payload, 1234);
     tgc_wire_put_i32(request.payload + 4, 2);
     tgc_wire_put_u32(request.payload + 8, TGC_IPC_CREAT | 0600U);
-    CHECK(tgc_broker_dispatch(store, &request, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, 400, &response) == 0);
     int semid = response.header.result;
     CHECK(semid > 0);
 
-    request_init(&request, TGC_OPCODE_SETALL, 3, 16);
+    request_init(&request, TGC_OPCODE_SETALL, 3, 12);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 2);
-    tgc_wire_put_i32(request.payload + 8, 500);
-    tgc_wire_put_u16(request.payload + 12, 3);
-    tgc_wire_put_u16(request.payload + 14, 4);
-    CHECK(tgc_broker_dispatch(store, &request, &response) == 0);
+    tgc_wire_put_u16(request.payload + 8, 3);
+    tgc_wire_put_u16(request.payload + 10, 4);
+    CHECK(tgc_broker_dispatch(store, &request, 500, &response) == 0);
     CHECK(response.header.result == 0);
 
     request_init(&request, TGC_OPCODE_GETALL, 4, 8);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 2);
-    CHECK(tgc_broker_dispatch(store, &request, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, 500, &response) == 0);
     CHECK(response.header.result == 0 && response.header.payload_length == 8);
     CHECK(tgc_wire_get_u32(response.payload) == 2);
     CHECK(tgc_wire_get_u16(response.payload + 4) == 3);
     CHECK(tgc_wire_get_u16(response.payload + 6) == 4);
 
-    request_init(&request, TGC_OPCODE_SEMOP, 5, 20);
+    request_init(&request, TGC_OPCODE_SEMOP, 5, 16);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 1);
-    tgc_wire_put_i32(request.payload + 8, 600);
+    tgc_wire_put_u16(request.payload + 8, 0);
+    tgc_wire_put_i16(request.payload + 10, -2);
     tgc_wire_put_u16(request.payload + 12, 0);
-    tgc_wire_put_i16(request.payload + 14, -2);
-    tgc_wire_put_u16(request.payload + 16, 0);
-    tgc_wire_put_u16(request.payload + 18, 0);
-    CHECK(tgc_broker_dispatch(store, &request, &response) == 0);
+    tgc_wire_put_u16(request.payload + 14, 0);
+    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
     CHECK(response.header.result == 0);
 
     request_init(&request, TGC_OPCODE_GETVAL, 6, 8);
     tgc_wire_put_i32(request.payload, semid);
     tgc_wire_put_u32(request.payload + 4, 0);
-    CHECK(tgc_broker_dispatch(store, &request, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
     CHECK(response.header.result == 1);
 
+    request_init(&request, TGC_OPCODE_GETPID, 7, 8);
+    tgc_wire_put_i32(request.payload, semid);
+    tgc_wire_put_u32(request.payload + 4, 0);
+    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
+    CHECK(response.header.result == 600);
+
     request.header.payload_length = 7;
-    CHECK(tgc_broker_dispatch(store, &request, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
     CHECK(response.header.result == -EMSGSIZE);
     CHECK(response.header.payload_length == 0);
 
-    request_init(&request, TGC_OPCODE_REMOVE, 7, 4);
+    request_init(&request, TGC_OPCODE_REMOVE, 8, 4);
     tgc_wire_put_i32(request.payload, semid);
-    CHECK(tgc_broker_dispatch(store, &request, &response) == 0);
+    CHECK(tgc_broker_dispatch(store, &request, 600, &response) == 0);
     CHECK(response.header.result == 0);
 
 done:

@@ -57,6 +57,8 @@ The first milestone is checked in:
   evaluation;
 - a version-1, explicitly little-endian and bounded request/response protocol,
   plus a strict dispatcher exposing every completed state-core operation;
+- a runnable `tgcompatd` Unix-socket broker with mode-0700 runtime-directory
+  validation, a mode-0600 socket, and same-UID `SO_PEERCRED` authentication;
 - an evidence-backed compatibility matrix;
 - a no-ptrace architecture for a per-Termux-UID semaphore broker; and
 - a staged path from probes to a patched Termux glibc package and native Steam
@@ -67,9 +69,22 @@ shared memory pass; robust-list and SysV semaphore calls return `ENOSYS`. This
 confirms that semaphore compatibility is the first implementation target. See
 the [raw result](docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt).
 
-The same-UID Unix socket transport, blocking `semop`, and glibc integration are
-the next implementation milestone. See
+Blocking `semop` queues, glibc integration, and an on-tablet native client are
+the next implementation milestones. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+## Run the broker
+
+The socket directory is part of the security boundary. It must belong to the
+current UID and have exact mode 0700:
+
+```sh
+install -d -m 0700 "$HOME/.cache/tgcompat-run"
+./build/tgcompatd --socket "$HOME/.cache/tgcompat-run/broker.sock"
+```
+
+`TGCOMPAT_SOCKET` can provide the same absolute path. Startup refuses to
+replace an existing path; a normally stopped broker removes its own socket.
 
 ## Run the probes
 

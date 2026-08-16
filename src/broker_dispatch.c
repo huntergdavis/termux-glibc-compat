@@ -9,8 +9,8 @@ enum {
     SEMGET_SIZE = 12,
     SEMID_SIZE = 4,
     SEMNUM_SIZE = 8,
-    SETVAL_SIZE = 16,
-    ARRAY_PREFIX_SIZE = 12,
+    SETVAL_SIZE = 12,
+    ARRAY_PREFIX_SIZE = 8,
     OP_SIZE = 8,
 };
 
@@ -56,7 +56,8 @@ static int dispatch_semnum(const struct tgc_sem_store *store,
 }
 
 static int dispatch_setval(struct tgc_sem_store *store,
-                           const struct tgc_protocol_packet *request)
+                           const struct tgc_protocol_packet *request,
+                           int32_t actor_pid)
 {
     if (request->header.payload_length != SETVAL_SIZE) {
         return -EMSGSIZE;
@@ -64,8 +65,7 @@ static int dispatch_setval(struct tgc_sem_store *store,
     int semid = tgc_wire_get_i32(request->payload);
     uint32_t semnum = tgc_wire_get_u32(request->payload + 4);
     uint32_t value = tgc_wire_get_u32(request->payload + 8);
-    int32_t pid = tgc_wire_get_i32(request->payload + 12);
-    return tgc_sem_store_setval(store, semid, semnum, value, pid);
+    return tgc_sem_store_setval(store, semid, semnum, value, actor_pid);
 }
 
 static int dispatch_getall(const struct tgc_sem_store *store,
@@ -94,41 +94,41 @@ static int dispatch_getall(const struct tgc_sem_store *store,
 }
 
 static int dispatch_setall(struct tgc_sem_store *store,
-                           const struct tgc_protocol_packet *request)
+                           const struct tgc_protocol_packet *request,
+                           int32_t actor_pid)
 {
     if (request->header.payload_length < ARRAY_PREFIX_SIZE) {
         return -EMSGSIZE;
     }
     int semid = tgc_wire_get_i32(request->payload);
     uint32_t count = tgc_wire_get_u32(request->payload + 4);
-    int32_t pid = tgc_wire_get_i32(request->payload + 8);
     if (count == 0 || count > TGC_SEM_MAX_PER_SET ||
         request->header.payload_length != ARRAY_PREFIX_SIZE + (count * 2)) {
         return -EMSGSIZE;
     }
     uint16_t values[TGC_SEM_MAX_PER_SET];
     for (uint32_t i = 0; i < count; ++i) {
-        values[i] = tgc_wire_get_u16(request->payload + 12 + (i * 2));
+        values[i] = tgc_wire_get_u16(request->payload + 8 + (i * 2));
     }
-    return tgc_sem_store_setall(store, semid, values, count, pid);
+    return tgc_sem_store_setall(store, semid, values, count, actor_pid);
 }
 
 static int dispatch_semop(struct tgc_sem_store *store,
-                          const struct tgc_protocol_packet *request)
+                          const struct tgc_protocol_packet *request,
+                          int32_t actor_pid)
 {
     if (request->header.payload_length < ARRAY_PREFIX_SIZE) {
         return -EMSGSIZE;
     }
     int semid = tgc_wire_get_i32(request->payload);
     uint32_t count = tgc_wire_get_u32(request->payload + 4);
-    int32_t pid = tgc_wire_get_i32(request->payload + 8);
     if (count == 0 || count > TGC_SEM_MAX_PER_SET ||
         request->header.payload_length != ARRAY_PREFIX_SIZE + (count * OP_SIZE)) {
         return -EMSGSIZE;
     }
     struct tgc_sem_op operations[TGC_SEM_MAX_PER_SET];
     for (uint32_t i = 0; i < count; ++i) {
-        const uint8_t *wire = request->payload + 12 + (i * OP_SIZE);
+        const uint8_t *wire = request->payload + 8 + (i * OP_SIZE);
         if (tgc_wire_get_u16(wire + 6) != 0) {
             return -EPROTO;
         }
@@ -136,18 +136,23 @@ static int dispatch_semop(struct tgc_sem_store *store,
         operations[i].sem_op = tgc_wire_get_i16(wire + 2);
         operations[i].sem_flg = tgc_wire_get_u16(wire + 4);
     }
-    return tgc_sem_store_tryop(store, semid, operations, count, pid);
+    return tgc_sem_store_tryop(store, semid, operations, count, actor_pid);
 }
 
 int tgc_broker_dispatch(struct tgc_sem_store *store,
                         const struct tgc_protocol_packet *request,
+                        int32_t actor_pid,
                         struct tgc_protocol_packet *response)
 {
     if (store == NULL || request == NULL || response == NULL) {
         return -EINVAL;
     }
+    if (actor_pid <= 0) {
+        return -EINVAL;
+    }
     if (request->header.version != TGC_PROTOCOL_VERSION ||
         request->header.kind != TGC_PROTOCOL_REQUEST ||
+        request->header.result != 0 ||
         request->header.payload_length > TGC_PROTOCOL_MAX_PAYLOAD) {
         return -EPROTO;
     }
@@ -172,16 +177,16 @@ int tgc_broker_dispatch(struct tgc_sem_store *store,
         result = dispatch_semnum(store, request, request->header.opcode);
         break;
     case TGC_OPCODE_SETVAL:
-        result = dispatch_setval(store, request);
+        result = dispatch_setval(store, request, actor_pid);
         break;
     case TGC_OPCODE_GETALL:
         result = dispatch_getall(store, request, response);
         break;
     case TGC_OPCODE_SETALL:
-        result = dispatch_setall(store, request);
+        result = dispatch_setall(store, request, actor_pid);
         break;
     case TGC_OPCODE_SEMOP:
-        result = dispatch_semop(store, request);
+        result = dispatch_semop(store, request, actor_pid);
         break;
     default:
         result = -ENOSYS;
