@@ -46,7 +46,7 @@
 
 - [x] Isolate Pressure Vessel namespace/filesystem requirements
 - [x] Document the required PRoot boundary for Pressure Vessel/Proton/FEX
-- [ ] Re-run the Tomb Raider built-in benchmark with matched settings and
+- [x] Re-run the Tomb Raider built-in benchmark with matched settings and
       thermal state
 - [ ] Publish CPU, GPU, memory, frame-time, and correctness comparisons
 - [ ] Replace the remaining PRoot Runtime/Proton filesystem boundary without

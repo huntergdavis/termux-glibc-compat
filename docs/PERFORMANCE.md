@@ -68,32 +68,51 @@ target. The official patched glibc package now also passes its extracted public
 API suite. The authenticated Steam/CEF host now runs through its
 content-addressed loader without a Steam-host PRoot tracer.
 
-## 2026-08-17 native Steam and preliminary game measurements
+## 2026-08-17 native Steam and controlled game measurements
 
 The controlled native-host Tomb Raider launch reached the first 2800x1752 game
 window 58.256 seconds after the Runtime request, versus 407.236 seconds in the
 earlier all-PRoot observation. That interval is 85.7% shorter, or 6.99x as
 fast. This is a startup result, not an FPS result.
 
-Two game-authored warm-ups at 2800x1752 Low, V-Sync off reported:
+The completed 119.92 Hz control at 2800x1752 Low, V-Sync off reported:
 
 | Pass | Minimum | Maximum | Average |
 |---|---:|---:|---:|
-| Warm-up 1 | 15.6 | 32.9 | 23.6 |
-| Warm-up 2 | 5.3 | 32.0 | 24.2 |
-| Mean of warm-up averages | | | **23.9** |
+| Recorded 1 | 14.6 | 32.4 | 24.8 |
+| Recorded 2 | 16.3 | 33.6 | 22.7 |
+| Recorded 3 | 16.4 | 31.7 | 22.7 |
+| Mean | **15.767** | **32.567** | **23.400** |
 
-The earlier PRoot-host three-run mean was 22.2 FPS average. The preliminary
-native-host point estimate is 7.7% higher, but it is not a matched-series
-claim: the samples are warm-ups, not recorded passes, and Warm-up 1 ended at
-73.9 C with CPU and GPU policy throttled. One warm-up plus three recorded
-passes with automatic cooldown remains the acceptance gate.
+The earlier PRoot-host three-run mean was 22.2 FPS average, so this native-host
+control is 5.4% higher. Each pass began with full CPU/GPU policy after automatic
+cooldown.
+
+Changing only the X presentation rate from 119.92 to a verified 59.97 Hz then
+reported:
+
+| Pass | Minimum | Maximum | Average |
+|---|---:|---:|---:|
+| Recorded 1 | 17.3 | 33.8 | 25.3 |
+| Recorded 2 | 13.4 | 35.5 | 24.9 |
+| Recorded 3 | 17.9 | 34.2 | 25.3 |
+| Mean | **16.200** | **34.500** | **25.167** |
+
+Average FPS improved 7.6%, maximum 5.9%, minimum 2.7%, and average-FPS median
+11.5%. This is a controlled display-rate result, not a pure glibc claim. Every
+pass still ended with the GPU at 492 MHz/thermal level six; 60 Hz did not remove
+the tablet's thermal ceiling.
 
 Process evidence explains why startup and FPS moved differently. Steam itself
 is native glibc now, while the game still enters Runtime/Proton/FEX through one
 explicit PRoot filesystem process because unrooted Android rejects the needed
 Bubblewrap namespaces. Removing that remaining game-boundary tracer is the next
 structural performance experiment.
+
+The exact game series live in the companion repository:
+[`119.92 Hz control`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-safe-119hz-20260817.json)
+and
+[`59.97 Hz A/B`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-safe-60hz-20260817.json).
 
 ## Rules for performance claims
 

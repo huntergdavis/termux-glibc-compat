@@ -7,8 +7,8 @@ unrooted Termux app sandbox—without putting every syscall through PRoot's
 This is an early research and implementation project. The native glibc patch
 now passes its public API suite from an official Termux package on the tablet,
 and the authenticated Steam client plus CEF now run through that loader without
-a Steam-host PRoot tracer. A thermally matched three-run game benchmark is still
-pending; the Proton game boundary currently retains one explicit PRoot process.
+a Steam-host PRoot tracer. A thermally matched three-run game benchmark is
+complete; the Proton game boundary currently retains one explicit PRoot process.
 
 ## Why this exists
 
@@ -110,7 +110,7 @@ The integration overlay and its exact upstream pin are documented in
 [`integration/termux-glibc/README.md`](integration/termux-glibc/README.md).
 See also [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-## Native Steam and preliminary Tomb Raider result
+## Native Steam and controlled Tomb Raider result
 
 The content-addressed glibc host now runs the real authenticated ARM64 Steam
 client, CEF, networking, X11, and PulseAudio while retaining the saved login.
@@ -121,13 +121,23 @@ the native-host launch interval is **85.7% shorter, or 6.99x as fast**. The
 schema-v2 timing artifact is retained in the companion repository:
 [`tomb-raider-native-supervised-cold-20260817.json`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/launch-timings/tomb-raider-native-supervised-cold-20260817.json).
 
-Two game-authored panel-native Low warm-ups reported 15.6/32.9/23.6 and
-5.3/32.0/24.2 FPS, a 23.9 FPS average-of-averages. The prior PRoot-host
-three-run mean was 22.2 FPS, so the preliminary point estimate is 7.7% higher.
-That is **not** a controlled FPS conclusion: these are warm-ups rather than
-three recorded passes, minimum FPS remains noisy, and the first warm-up ended
-at 73.9 C with CPU and GPU policy throttled. The automated runner now requires
-matched starting temperature and full CPU/GPU policy between every pass.
+The first controlled game series used panel-native 2800x1752 Low, V-Sync off,
+one warm-up, three recorded passes, and automatic full-policy/thermal cooldown.
+At 119.92 Hz X refresh it averaged 15.767/32.567/23.400 FPS, 5.4% above the
+prior PRoot-host 22.2 FPS average. Changing only Samsung Motion smoothness to
+Standard produced a verified 59.97 Hz X surface and
+16.200/34.500/**25.167 FPS**, another 7.6% average-FPS improvement. Average-FPS
+median improved from 22.7 to 25.3. Both exact series are retained in the
+companion repository:
+[`119.92 Hz control`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-safe-119hz-20260817.json)
+and
+[`59.97 Hz A/B`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-safe-60hz-20260817.json).
+
+The display change improved throughput but did not eliminate thermal policy
+loss. Every recorded pass in both series began at full CPU/GPU policy and ended
+with the GPU capped at 492 MHz/thermal level six. The 60 Hz improvement may
+therefore reflect lower presentation work or contention without producing a
+lower final thermal state.
 
 This result also narrows the remaining engineering work. Native glibc removed
 PRoot from Steam, but Android denied Bubblewrap's user namespace with `EINVAL`
