@@ -62,9 +62,10 @@ static int ensure_connection(struct tgc_client *client)
     return 0;
 }
 
-static int exchange(struct tgc_client *client,
-                    struct tgc_protocol_packet *request,
-                    struct tgc_protocol_packet *response)
+static int exchange_with_interrupt(struct tgc_client *client,
+                                   struct tgc_protocol_packet *request,
+                                   struct tgc_protocol_packet *response,
+                                   int interruptible)
 {
     if (client == NULL || request == NULL || response == NULL) {
         return -EINVAL;
@@ -80,7 +81,10 @@ static int exchange(struct tgc_client *client,
     request->header.request_id = client->next_request_id;
     result = tgc_transport_send(client->socket_fd, request);
     if (result == 0) {
-        result = tgc_transport_receive(client->socket_fd, response);
+        result = interruptible != 0
+                     ? tgc_transport_receive_interruptible(client->socket_fd,
+                                                           response)
+                     : tgc_transport_receive(client->socket_fd, response);
     }
     if (result != 0) {
         tgc_client_close(client);
@@ -97,11 +101,33 @@ static int exchange(struct tgc_client *client,
     return 0;
 }
 
+static int exchange(struct tgc_client *client,
+                    struct tgc_protocol_packet *request,
+                    struct tgc_protocol_packet *response)
+{
+    return exchange_with_interrupt(client, request, response, 0);
+}
+
 static int scalar_call(struct tgc_client *client,
                        struct tgc_protocol_packet *request)
 {
     struct tgc_protocol_packet response;
     int result = exchange(client, request, &response);
+    if (result != 0) {
+        return result;
+    }
+    if (response.header.payload_length != 0) {
+        tgc_client_close(client);
+        return -EPROTO;
+    }
+    return response.header.result;
+}
+
+static int scalar_call_interruptible(struct tgc_client *client,
+                                     struct tgc_protocol_packet *request)
+{
+    struct tgc_protocol_packet response;
+    int result = exchange_with_interrupt(client, request, &response, 1);
     if (result != 0) {
         return result;
     }
@@ -256,7 +282,7 @@ static int semop_call(struct tgc_client *client, int semid,
         tgc_wire_put_u16(wire + 4, operations[i].sem_flg);
         tgc_wire_put_u16(wire + 6, 0);
     }
-    int result = scalar_call(client, &request);
+    int result = scalar_call_interruptible(client, &request);
     return result == TGC_SEM_OP_BLOCKED ? -EPROTO : result;
 }
 

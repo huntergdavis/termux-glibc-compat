@@ -33,6 +33,9 @@ int tgc_transport_get_credentials(int socket_fd, uid_t expected_uid,
 
 /* Receive or send one complete bounded protocol packet. */
 int tgc_transport_receive(int socket_fd, struct tgc_protocol_packet *packet);
+/* As above, but return -EINTR and discard the connection after a signal. */
+int tgc_transport_receive_interruptible(
+    int socket_fd, struct tgc_protocol_packet *packet);
 int tgc_transport_send(int socket_fd,
                        const struct tgc_protocol_packet *packet);
 

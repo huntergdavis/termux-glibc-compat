@@ -246,10 +246,14 @@ int __tgcompat_glibc_semtimedop(int semid, struct sembuf *operations,
     if (operations == NULL || count == 0 || count > TGC_SEM_MAX_PER_SET ||
         (has_timeout != 0 &&
          (timeout_seconds < 0 || timeout_nanoseconds < 0 ||
-          timeout_nanoseconds >= 1000000000LL ||
-          timeout_seconds >
-              (INT64_MAX - timeout_nanoseconds) / 1000000000LL))) {
+          timeout_nanoseconds >= 1000000000LL))) {
         __set_errno(EINVAL);
+        return -1;
+    }
+    if (has_timeout != 0 &&
+        timeout_seconds >
+            (INT64_MAX - timeout_nanoseconds) / 1000000000LL) {
+        __set_errno(EOVERFLOW);
         return -1;
     }
     struct tgc_sem_op converted[TGC_SEM_MAX_PER_SET];

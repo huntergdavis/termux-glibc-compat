@@ -216,7 +216,7 @@ int tgc_transport_get_credentials(int socket_fd, uid_t expected_uid,
 }
 
 static int receive_exact(int socket_fd, uint8_t *output, size_t length,
-                         int clean_eof_allowed)
+                         int clean_eof_allowed, int restart_on_eintr)
 {
     size_t offset = 0;
     while (offset < length) {
@@ -229,20 +229,26 @@ static int receive_exact(int socket_fd, uint8_t *output, size_t length,
             return clean_eof_allowed != 0 && offset == 0 ? TGC_TRANSPORT_EOF
                                                          : -EPROTO;
         }
-        if (errno != EINTR) {
-            return -errno;
+        if (errno == EINTR) {
+            if (restart_on_eintr != 0) {
+                continue;
+            }
+            return -EINTR;
         }
+        return -errno;
     }
     return 0;
 }
 
-int tgc_transport_receive(int socket_fd, struct tgc_protocol_packet *packet)
+static int receive_packet(int socket_fd, struct tgc_protocol_packet *packet,
+                          int restart_on_eintr)
 {
     if (socket_fd < 0 || packet == NULL) {
         return -EINVAL;
     }
     uint8_t wire_header[TGC_PROTOCOL_HEADER_SIZE];
-    int result = receive_exact(socket_fd, wire_header, sizeof(wire_header), 1);
+    int result = receive_exact(socket_fd, wire_header, sizeof(wire_header), 1,
+                               restart_on_eintr);
     if (result != 0) {
         return result;
     }
@@ -252,7 +258,18 @@ int tgc_transport_receive(int socket_fd, struct tgc_protocol_packet *packet)
         return result;
     }
     return receive_exact(socket_fd, packet->payload,
-                         packet->header.payload_length, 0);
+                         packet->header.payload_length, 0, restart_on_eintr);
+}
+
+int tgc_transport_receive(int socket_fd, struct tgc_protocol_packet *packet)
+{
+    return receive_packet(socket_fd, packet, 1);
+}
+
+int tgc_transport_receive_interruptible(
+    int socket_fd, struct tgc_protocol_packet *packet)
+{
+    return receive_packet(socket_fd, packet, 0);
 }
 
 static int send_exact(int socket_fd, const uint8_t *input, size_t length)

@@ -61,9 +61,15 @@ static void *serve_client(void *argument)
     return NULL;
 }
 
+static int is_normal_client_disconnect(int result)
+{
+    return result == -EPIPE || result == -ECONNRESET;
+}
+
 static void report_worker_result(const struct client_worker *worker)
 {
-    if (worker->result != 0) {
+    if (worker->result != 0 &&
+        !is_normal_client_disconnect(worker->result)) {
         fprintf(stderr, "tgcompatd: client: %s\n", strerror(-worker->result));
     }
 }
@@ -223,7 +229,7 @@ int main(int argc, char **argv)
         if (once != 0) {
             result = tgc_broker_serve_connection(broker, client_fd, uid);
             (void)close(client_fd);
-            if (result != 0) {
+            if (result != 0 && !is_normal_client_disconnect(result)) {
                 fprintf(stderr, "tgcompatd: client: %s\n", strerror(-result));
                 failed = 1;
             }

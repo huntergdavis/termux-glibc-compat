@@ -40,6 +40,14 @@ static int wait_for_broker(struct tgc_client *client)
     return -ETIMEDOUT;
 }
 
+static volatile sig_atomic_t signal_observed;
+
+static void record_signal(int signal_number)
+{
+    (void)signal_number;
+    signal_observed = 1;
+}
+
 int main(void)
 {
     int failed = 0;
@@ -48,6 +56,8 @@ int main(void)
     char socket_path[sizeof(directory) + 24];
     pid_t daemon_pid = -1;
     pid_t child_pid = -1;
+    int signal_action_installed = 0;
+    struct sigaction previous_signal_action;
     struct tgc_client client;
     int client_initialized = 0;
     CHECK(tgc_test_temp_template(directory, sizeof(directory),
@@ -124,6 +134,30 @@ int main(void)
     CHECK(tgc_client_semtimedop(&client, semid, &blocked_timed, 1,
                                 20000000) == -EAGAIN);
 
+    struct sigaction signal_action = {0};
+    signal_action.sa_handler = record_signal;
+    CHECK(sigemptyset(&signal_action.sa_mask) == 0);
+    CHECK(sigaction(SIGUSR1, &signal_action, &previous_signal_action) == 0);
+    signal_action_installed = 1;
+    signal_observed = 0;
+    child_pid = fork();
+    CHECK(child_pid >= 0);
+    if (child_pid == 0) {
+        const struct timespec pause = {.tv_sec = 0, .tv_nsec = 100000000L};
+        (void)nanosleep(&pause, NULL);
+        _exit(kill(getppid(), SIGUSR1) == 0 ? 0 : 22);
+    }
+    int interrupted_result = tgc_client_semtimedop(
+        &client, semid, &blocked_timed, 1, 30000000000LL);
+    int child_status = 0;
+    CHECK(waitpid(child_pid, &child_status, 0) == child_pid);
+    CHECK(WIFEXITED(child_status) && WEXITSTATUS(child_status) == 0);
+    child_pid = -1;
+    CHECK(interrupted_result == -EINTR && signal_observed != 0);
+    CHECK(sigaction(SIGUSR1, &previous_signal_action, NULL) == 0);
+    signal_action_installed = 0;
+    CHECK(tgc_client_getval(&client, semid, 0) == 1);
+
     child_pid = fork();
     CHECK(child_pid >= 0);
     if (child_pid == 0) {
@@ -132,7 +166,7 @@ int main(void)
         int result = tgc_client_setval(&client, semid, 1, 8);
         _exit(result == 0 ? 0 : 20);
     }
-    int child_status = 0;
+    child_status = 0;
     CHECK(waitpid(child_pid, &child_status, 0) == child_pid);
     CHECK(WIFEXITED(child_status) && WEXITSTATUS(child_status) == 0);
     CHECK(tgc_client_getval(&client, semid, 1) == 8);
@@ -172,6 +206,9 @@ int main(void)
     CHECK(tgc_client_getval(&client, semid, 0) == -EINVAL);
 
 done:
+    if (signal_action_installed != 0) {
+        (void)sigaction(SIGUSR1, &previous_signal_action, NULL);
+    }
     if (child_pid > 0) {
         (void)kill(child_pid, SIGKILL);
         (void)waitpid(child_pid, NULL, 0);
