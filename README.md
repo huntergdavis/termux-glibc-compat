@@ -127,6 +127,11 @@ variadic, and spawned child launches through the real selected loader.
 for launchers that hard-code an Android-visible shell even though the command
 they are constructing belongs in the selected glibc environment; it applies
 uniformly to direct, variadic, PATH, and `posix_spawn` entry points.
+An exact `TGCOMPAT_EXEC_PATH_FROM=/absolute/source` plus
+`TGCOMPAT_EXEC_PATH_TO=/absolute/target` pair provides the same coverage for a
+single configured launcher boundary. Both variables must come from the child
+environment or both fall back to the calling process; partial or relative
+policies are ignored. The original `argv[0]` is preserved.
 
 `build/libtgcompat-android-root.so` is a separately gated experiment. Android
 denies a read-open of `/proc/self/root`, while an `O_PATH` descriptor is usable

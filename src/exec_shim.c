@@ -66,6 +66,8 @@ struct loader_invocation {
 static const char ld_preload_name[] = "LD_PRELOAD";
 static const char proc_self_exe_name[] = "TGCOMPAT_PROC_SELF_EXE";
 static const char shell_redirect_name[] = "TGCOMPAT_EXEC_SHELL";
+static const char path_from_name[] = "TGCOMPAT_EXEC_PATH_FROM";
+static const char path_to_name[] = "TGCOMPAT_EXEC_PATH_TO";
 
 static char *environment_value(char *const envp[], const char *name) {
     size_t index;
@@ -107,6 +109,37 @@ static const char *redirect_shell_path(const char *filename,
         return filename;
     }
     return redirect;
+}
+
+static const char *redirect_configured_path(const char *filename,
+        char *const envp[]) {
+    char *from;
+    char *to;
+
+    if (filename == NULL) {
+        return NULL;
+    }
+    from = environment_value(envp, path_from_name);
+    to = environment_value(envp, path_to_name);
+    if (from == NULL && to == NULL) {
+        from = environment_value(environ, path_from_name);
+        to = environment_value(environ, path_to_name);
+    }
+    if (from == NULL || to == NULL || from[0] != '/' || from[1] == '\0' ||
+            to[0] != '/' || to[1] == '\0' || strcmp(filename, from) != 0) {
+        return filename;
+    }
+    return to;
+}
+
+static const char *redirect_exec_path(const char *filename,
+        char *const envp[]) {
+    const char *redirect = redirect_configured_path(filename, envp);
+
+    if (redirect != filename) {
+        return redirect;
+    }
+    return redirect_shell_path(filename, envp);
 }
 
 static bool interpreter_matches(const char *interpreter,
@@ -291,7 +324,7 @@ static enum wrap_result build_loader_arguments(const char *filename,
     char *ld_preload_assignment = NULL;
     char **loader_environment;
 
-    launch_filename = redirect_shell_path(filename, envp);
+    launch_filename = redirect_exec_path(filename, envp);
     loader = environment_value(envp, "TGCOMPAT_LD_SO");
     if (!should_wrap(launch_filename, envp)) {
         return WRAP_NO;

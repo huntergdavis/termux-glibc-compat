@@ -35,6 +35,34 @@ static char **environment_without(const char *name) {
     return filtered;
 }
 
+static char **environment_without_two(const char *first, const char *second) {
+    size_t count = 0;
+    size_t index;
+    size_t output = 0;
+    size_t first_length = strlen(first);
+    size_t second_length = strlen(second);
+    char **filtered;
+
+    while (environ[count] != NULL) {
+        ++count;
+    }
+    filtered = calloc(count + 1U, sizeof(*filtered));
+    if (filtered == NULL) {
+        return NULL;
+    }
+    for (index = 0; index < count; ++index) {
+        if ((strncmp(environ[index], first, first_length) == 0 &&
+                environ[index][first_length] == '=') ||
+                (strncmp(environ[index], second, second_length) == 0 &&
+                    environ[index][second_length] == '=')) {
+            continue;
+        }
+        filtered[output++] = environ[index];
+    }
+    filtered[output] = NULL;
+    return filtered;
+}
+
 int main(int argc, char **argv) {
     char *child_arguments[] = {
         (char *)"tgcompat-preserved-argv0",
@@ -54,6 +82,16 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "execve") == 0) {
         execve(argv[2], child_arguments, environ);
+    } else if (strcmp(argv[1], "execve-filter-path-control") == 0) {
+        char **filtered = environment_without_two(
+            "TGCOMPAT_EXEC_PATH_FROM", "TGCOMPAT_EXEC_PATH_TO");
+
+        if (filtered == NULL) {
+            perror("exec-shim filtered path environment");
+            return 111;
+        }
+        execve(argv[2], child_arguments, filtered);
+        free(filtered);
     } else if (strcmp(argv[1], "execve-filter-control") == 0) {
         char **filtered = environment_without("TGCOMPAT_EXEC_LD_PRELOAD");
 

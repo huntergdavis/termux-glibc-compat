@@ -82,6 +82,37 @@ output=$(
 [[ $output == 'exec shim target: PASS' ]] ||
     die "/usr/bin/sh redirect produced unexpected output: $output"
 
+redirect_source=/no/tgcompat-runtime-entry
+for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
+    output=$(
+        env \
+            LD_PRELOAD="$shim" \
+            TGCOMPAT_LD_SO="$loader" \
+            TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+            TGCOMPAT_EXEC_PATH_FROM="$redirect_source" \
+            TGCOMPAT_EXEC_PATH_TO="$target" \
+            TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
+            TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
+            "$driver" "$mode" "$redirect_source"
+    )
+    [[ $output == 'exec shim target: PASS' ]] ||
+        die "$mode exact path redirect produced unexpected output: $output"
+done
+
+output=$(
+    env \
+        LD_PRELOAD="$shim" \
+        TGCOMPAT_LD_SO="$loader" \
+        TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+        TGCOMPAT_EXEC_PATH_FROM="$redirect_source" \
+        TGCOMPAT_EXEC_PATH_TO="$target" \
+        TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
+        TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
+        "$driver" execve-filter-path-control "$redirect_source"
+)
+[[ $output == 'exec shim target: PASS' ]] ||
+    die "process-level path policy produced unexpected output: $output"
+
 output=$(
     env \
         LD_PRELOAD="$shim:/deliberately/wrong-preload.so" \
