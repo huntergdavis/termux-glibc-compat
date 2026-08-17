@@ -59,9 +59,11 @@ struct loader_invocation {
     char **arguments;
     char *filename;
     char **environment;
+    char *ld_preload_assignment;
     char *proc_self_exe_assignment;
 };
 
+static const char ld_preload_name[] = "LD_PRELOAD";
 static const char proc_self_exe_name[] = "TGCOMPAT_PROC_SELF_EXE";
 
 static char *environment_value(char *const envp[], const char *name) {
@@ -251,6 +253,7 @@ static enum wrap_result build_loader_arguments(const char *filename,
         struct loader_invocation *invocation) {
     char *loader;
     char *library_path;
+    char *ld_preload_override;
     char *filename_copy;
     char **loader_argv;
     size_t argument_count = 0;
@@ -259,9 +262,12 @@ static enum wrap_result build_loader_arguments(const char *filename,
     size_t output_index = 0;
     size_t input_index;
     size_t name_length = sizeof(proc_self_exe_name) - 1U;
+    size_t ld_preload_name_length = sizeof(ld_preload_name) - 1U;
+    size_t ld_preload_override_length;
     size_t original_path_length;
     char *original_path;
     char *assignment;
+    char *ld_preload_assignment = NULL;
     char **loader_environment;
 
     loader = environment_value(envp, "TGCOMPAT_LD_SO");
@@ -276,15 +282,24 @@ static enum wrap_result build_loader_arguments(const char *filename,
         }
         ++argument_count;
     }
+    ld_preload_override = environment_value(
+        envp, "TGCOMPAT_EXEC_LD_PRELOAD");
     if (envp != NULL) {
         while (envp[environment_count] != NULL) {
-            if (environment_count == SIZE_MAX - 2U) {
+            if (environment_count == SIZE_MAX - 3U) {
                 errno = E2BIG;
                 return WRAP_ERROR;
             }
             if (strncmp(envp[environment_count], proc_self_exe_name,
                     name_length) != 0 ||
                     envp[environment_count][name_length] != '=') {
+                if (ld_preload_override != NULL &&
+                        strncmp(envp[environment_count], ld_preload_name,
+                            ld_preload_name_length) == 0 &&
+                        envp[environment_count][ld_preload_name_length] == '=') {
+                    ++environment_count;
+                    continue;
+                }
                 ++environment_keep_count;
             }
             ++environment_count;
@@ -316,7 +331,8 @@ static enum wrap_result build_loader_arguments(const char *filename,
         return WRAP_ERROR;
     }
     assignment = malloc(name_length + original_path_length + 2U);
-    loader_environment = calloc(environment_keep_count + 2U,
+    loader_environment = calloc(environment_keep_count +
+        (ld_preload_override != NULL ? 3U : 2U),
         sizeof(*loader_environment));
     if (assignment == NULL || loader_environment == NULL) {
         free(loader_environment);
@@ -325,6 +341,32 @@ static enum wrap_result build_loader_arguments(const char *filename,
         free(filename_copy);
         free(loader_argv);
         return WRAP_ERROR;
+    }
+    if (ld_preload_override != NULL) {
+        ld_preload_override_length = strlen(ld_preload_override);
+        if (ld_preload_override_length > SIZE_MAX -
+                ld_preload_name_length - 2U) {
+            free(loader_environment);
+            free(assignment);
+            free(filename_copy);
+            free(loader_argv);
+            errno = ENAMETOOLONG;
+            return WRAP_ERROR;
+        }
+        ld_preload_assignment = malloc(ld_preload_name_length +
+            ld_preload_override_length + 2U);
+        if (ld_preload_assignment == NULL) {
+            free(loader_environment);
+            free(assignment);
+            free(filename_copy);
+            free(loader_argv);
+            return WRAP_ERROR;
+        }
+        memcpy(ld_preload_assignment, ld_preload_name,
+            ld_preload_name_length);
+        ld_preload_assignment[ld_preload_name_length] = '=';
+        memcpy(ld_preload_assignment + ld_preload_name_length + 1U,
+            ld_preload_override, ld_preload_override_length + 1U);
     }
     memcpy(assignment, proc_self_exe_name, name_length);
     assignment[name_length] = '=';
@@ -338,7 +380,16 @@ static enum wrap_result build_loader_arguments(const char *filename,
                 envp[input_index][name_length] == '=') {
             continue;
         }
+        if (ld_preload_override != NULL &&
+                strncmp(envp[input_index], ld_preload_name,
+                    ld_preload_name_length) == 0 &&
+                envp[input_index][ld_preload_name_length] == '=') {
+            continue;
+        }
         loader_environment[output_index++] = envp[input_index];
+    }
+    if (ld_preload_assignment != NULL) {
+        loader_environment[output_index++] = ld_preload_assignment;
     }
     loader_environment[output_index++] = assignment;
     loader_environment[output_index] = NULL;
@@ -362,6 +413,7 @@ static enum wrap_result build_loader_arguments(const char *filename,
     invocation->arguments = loader_argv;
     invocation->filename = filename_copy;
     invocation->environment = loader_environment;
+    invocation->ld_preload_assignment = ld_preload_assignment;
     invocation->proc_self_exe_assignment = assignment;
     return WRAP_YES;
 }
@@ -372,10 +424,12 @@ static void free_loader_arguments(struct loader_invocation *invocation) {
     }
     free(invocation->filename);
     free(invocation->arguments);
+    free(invocation->ld_preload_assignment);
     free(invocation->proc_self_exe_assignment);
     free(invocation->environment);
     invocation->filename = NULL;
     invocation->arguments = NULL;
+    invocation->ld_preload_assignment = NULL;
     invocation->proc_self_exe_assignment = NULL;
     invocation->environment = NULL;
 }

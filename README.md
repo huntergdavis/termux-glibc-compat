@@ -113,7 +113,10 @@ See also [`docs/ROADMAP.md`](docs/ROADMAP.md).
 emulator. It reads only the target ELF header at launch time and wraps matching
 AArch64 Linux executables with `TGCOMPAT_LD_SO`; program files are never
 patched or copied. `TGCOMPAT_LIBRARY_PATH` supplies the loader search path and
-`TGCOMPAT_EXEC_DISABLE=1` is a fail-safe bypass. The test fixture gives its
+`TGCOMPAT_EXEC_DISABLE=1` is a fail-safe bypass. When a host rewrites
+`LD_PRELOAD` for a child with incompatible objects, an explicitly supplied
+`TGCOMPAT_EXEC_LD_PRELOAD` replaces that child value only at a wrapped Linux
+ELF boundary; leaving it unset preserves the caller's environment. The test fixture gives its
 target a deliberately nonexistent interpreter and verifies direct, PATH-based,
 variadic, and spawned child launches through the real selected loader.
 

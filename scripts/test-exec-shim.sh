@@ -45,6 +45,7 @@ for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
             LD_PRELOAD="$shim" \
             TGCOMPAT_LD_SO="$loader" \
             TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+            TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
             TGCOMPAT_PROC_SELF_EXE=/deliberately/wrong \
             TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
             "$driver" "$mode" "$mode_target"
@@ -52,6 +53,19 @@ for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
     [[ $output == 'exec shim target: PASS' ]] ||
         die "$mode produced unexpected wrapped output: $output"
 done
+
+output=$(
+    env \
+        LD_PRELOAD="$shim:/deliberately/wrong-preload.so" \
+        TGCOMPAT_LD_SO="$loader" \
+        TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+        TGCOMPAT_EXEC_LD_PRELOAD="$shim" \
+        TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
+        TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
+        "$driver" execve "$target" 2>/dev/null
+)
+[[ $output == 'exec shim target: PASS' ]] ||
+    die "LD_PRELOAD override produced unexpected output: $output"
 
 if env \
         LD_PRELOAD="$shim" \
