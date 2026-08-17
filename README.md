@@ -129,9 +129,10 @@ tested groundwork, not a replacement for the game-boundary PRoot process.
 experiment. Valve's ARM64 IPC code queries `get_robust_list(0, ...)` and aborts
 when Termux glibc returns `ENOSYS`. With `TGCOMPAT_ROBUST_LIST=1`, the shim
 returns a separate, lazily initialized Linux-compatible head for each thread
-and forwards every other syscall. This satisfies the userspace list contract
-Steam checks, but Android still does not register the head with the kernel.
-Kernel owner-death recovery is therefore not claimed.
+plus glibc's immediately preceding list-backlink word, and forwards every
+other syscall. This satisfies the userspace list contract Steam checks, but
+Android still does not register the head with the kernel. Kernel owner-death
+recovery is therefore not claimed.
 
 ## Run the broker
 

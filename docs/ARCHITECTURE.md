@@ -109,7 +109,9 @@ marks it unavailable. Ordinary pthread mutexes still use futexes. The opt-in
 `libtgcompat-robust.so` experiment supplies Steam with an independent,
 thread-local robust head because Valve's IPC implementation treats `ENOSYS` as
 fatal. The head has the 24-byte Linux layout and `-32` futex offset that Steam
-validates; unrelated syscalls pass through unchanged.
+validates. Its container also supplies glibc's predecessor word immediately
+before the public head, which Valve uses while maintaining the list; unrelated
+syscalls pass through unchanged.
 
 Robust process-shared mutex recovery is not claimed because Android's kernel
 does not know about the synthetic head. If a target application proves it

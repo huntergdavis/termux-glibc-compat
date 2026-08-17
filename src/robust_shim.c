@@ -16,8 +16,14 @@ typedef long (*syscall_function)(long, ...);
 
 static syscall_function real_syscall;
 static bool robust_list_enabled;
-static _Thread_local struct robust_list_head synthetic_head;
-static _Thread_local bool synthetic_head_initialized;
+
+struct pthread_compatible_robust_list {
+    struct robust_list *previous;
+    struct robust_list_head head;
+};
+
+static _Thread_local struct pthread_compatible_robust_list synthetic_list;
+static _Thread_local bool synthetic_list_initialized;
 
 static void resolve_syscall(void) {
     void *symbol = dlsym(RTLD_NEXT, "syscall");
@@ -35,13 +41,18 @@ __attribute__((constructor)) static void initialize_robust_shim(void) {
 }
 
 static struct robust_list_head *current_synthetic_head(void) {
-    if (!synthetic_head_initialized) {
-        synthetic_head.list.next = &synthetic_head.list;
-        synthetic_head.futex_offset = -32;
-        synthetic_head.list_op_pending = NULL;
-        synthetic_head_initialized = true;
+    _Static_assert(offsetof(struct pthread_compatible_robust_list, head) ==
+            sizeof(struct robust_list *),
+        "the pthread predecessor must immediately precede the robust head");
+
+    if (!synthetic_list_initialized) {
+        synthetic_list.previous = &synthetic_list.head.list;
+        synthetic_list.head.list.next = &synthetic_list.head.list;
+        synthetic_list.head.futex_offset = -32;
+        synthetic_list.head.list_op_pending = NULL;
+        synthetic_list_initialized = true;
     }
-    return &synthetic_head;
+    return &synthetic_list.head;
 }
 
 static long emulate_get_robust_list(va_list arguments) {

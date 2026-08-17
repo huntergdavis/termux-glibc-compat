@@ -22,8 +22,13 @@ struct thread_result {
 };
 
 static void check_head(struct robust_list_head *head, size_t length) {
+    struct robust_list *const *previous;
+
     CHECK(head != NULL);
     CHECK(length == sizeof(*head));
+    previous = (struct robust_list *const *)((const char *)head -
+        sizeof(*previous));
+    CHECK(*previous == &head->list);
     CHECK(head->list.next == &head->list);
     CHECK(head->futex_offset == -32);
     CHECK(head->list_op_pending == NULL);
