@@ -122,6 +122,11 @@ rebuilding a game environment. Leaving it unset in both places preserves the
 caller's environment. The test fixture gives its
 target a deliberately nonexistent interpreter and verifies direct, PATH-based,
 variadic, and spawned child launches through the real selected loader.
+`TGCOMPAT_EXEC_SHELL=/absolute/glibc/sh` additionally redirects only exact
+`/bin/sh` and `/usr/bin/sh` requests before that ELF decision. This opt-in is
+for launchers that hard-code an Android-visible shell even though the command
+they are constructing belongs in the selected glibc environment; it applies
+uniformly to direct, variadic, PATH, and `posix_spawn` entry points.
 
 `build/libtgcompat-android-root.so` is a separately gated experiment. Android
 denies a read-open of `/proc/self/root`, while an `O_PATH` descriptor is usable

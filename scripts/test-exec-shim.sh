@@ -54,6 +54,34 @@ for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
         die "$mode produced unexpected wrapped output: $output"
 done
 
+for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
+    output=$(
+        env \
+            LD_PRELOAD="$shim" \
+            TGCOMPAT_LD_SO="$loader" \
+            TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+            TGCOMPAT_EXEC_SHELL="$target" \
+            TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
+            TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
+            "$driver" "$mode" /bin/sh
+    )
+    [[ $output == 'exec shim target: PASS' ]] ||
+        die "$mode shell redirect produced unexpected output: $output"
+done
+
+output=$(
+    env \
+        LD_PRELOAD="$shim" \
+        TGCOMPAT_LD_SO="$loader" \
+        TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+        TGCOMPAT_EXEC_SHELL="$target" \
+        TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
+        TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
+        "$driver" execve /usr/bin/sh
+)
+[[ $output == 'exec shim target: PASS' ]] ||
+    die "/usr/bin/sh redirect produced unexpected output: $output"
+
 output=$(
     env \
         LD_PRELOAD="$shim:/deliberately/wrong-preload.so" \

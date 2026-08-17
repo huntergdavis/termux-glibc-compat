@@ -65,6 +65,7 @@ struct loader_invocation {
 
 static const char ld_preload_name[] = "LD_PRELOAD";
 static const char proc_self_exe_name[] = "TGCOMPAT_PROC_SELF_EXE";
+static const char shell_redirect_name[] = "TGCOMPAT_EXEC_SHELL";
 
 static char *environment_value(char *const envp[], const char *name) {
     size_t index;
@@ -87,6 +88,25 @@ static bool disabled_by_environment(char *const envp[]) {
     char *value = environment_value(envp, "TGCOMPAT_EXEC_DISABLE");
 
     return value != NULL && value[0] != '\0' && strcmp(value, "0") != 0;
+}
+
+static const char *redirect_shell_path(const char *filename,
+        char *const envp[]) {
+    char *redirect;
+
+    if (filename == NULL ||
+            (strcmp(filename, "/bin/sh") != 0 &&
+                strcmp(filename, "/usr/bin/sh") != 0)) {
+        return filename;
+    }
+    redirect = environment_value(envp, shell_redirect_name);
+    if (redirect == NULL) {
+        redirect = environment_value(environ, shell_redirect_name);
+    }
+    if (redirect == NULL || redirect[0] != '/' || redirect[1] == '\0') {
+        return filename;
+    }
+    return redirect;
 }
 
 static bool interpreter_matches(const char *interpreter,
@@ -251,6 +271,7 @@ __attribute__((constructor)) static void initialize_exec_shim(void) {
 static enum wrap_result build_loader_arguments(const char *filename,
         char *const argv[], char *const envp[],
         struct loader_invocation *invocation) {
+    const char *launch_filename;
     char *loader;
     char *library_path;
     char *ld_preload_override;
@@ -270,8 +291,9 @@ static enum wrap_result build_loader_arguments(const char *filename,
     char *ld_preload_assignment = NULL;
     char **loader_environment;
 
+    launch_filename = redirect_shell_path(filename, envp);
     loader = environment_value(envp, "TGCOMPAT_LD_SO");
-    if (!should_wrap(filename, envp)) {
+    if (!should_wrap(launch_filename, envp)) {
         return WRAP_NO;
     }
 
@@ -311,7 +333,7 @@ static enum wrap_result build_loader_arguments(const char *filename,
     }
 
     library_path = environment_value(envp, "TGCOMPAT_LIBRARY_PATH");
-    filename_copy = strdup(filename);
+    filename_copy = strdup(launch_filename);
     if (filename_copy == NULL) {
         return WRAP_ERROR;
     }
@@ -320,7 +342,7 @@ static enum wrap_result build_loader_arguments(const char *filename,
         free(filename_copy);
         return WRAP_ERROR;
     }
-    original_path = realpath(filename, NULL);
+    original_path = realpath(launch_filename, NULL);
     if (original_path == NULL) {
         free(filename_copy);
         free(loader_argv);
