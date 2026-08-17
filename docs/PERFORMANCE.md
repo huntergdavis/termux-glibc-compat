@@ -140,6 +140,32 @@ This completes the bounded FEX-profile phase without closing the performance
 gap. The next structural experiment remains removal or reduction of the
 explicit game-boundary PRoot tracer.
 
+## 2026-08-17 direct Steam Runtime execution proof
+
+The selected content-addressed patched glibc ran Steam Runtime 4's stock
+`usr/bin/true` directly on the Tab S8+ with exit status zero and no PRoot or
+Bubblewrap. The Runtime's own unpatched loader failed the same binary with
+`SIGSYS` at `set_robust_list`, so this is a direct validation of the existing
+Android glibc patch rather than a path alias or UI inference.
+
+The selected loader also ran Pressure Vessel 0.20260714.0's `pv-adverb`, which
+then supervised the Runtime binary successfully. A second pass let the
+existing `libtgcompat-exec.so` wrap the child ELF automatically and again
+returned zero. This establishes that the generic loader and child-execution
+layer already cross the core Runtime boundary; no new libc patch was needed
+for this proof.
+
+The remaining work is Steam-specific filesystem-plan dispatch. Pressure
+Vessel still needs its generated Runtime and provider-library view, while
+Android denies the namespaces Bubblewrap normally uses to expose that view.
+That dispatcher belongs in `steamclienttermux`; any newly discovered generic
+ELF, syscall, or child-execution behavior will continue to land here with a
+focused regression test.
+
+The required `deja` recall returned only the current investigation. This proof
+reuses this repository's documented robust-list patch and execution-boundary
+shim, not an unverified prior-session result.
+
 ## Rules for performance claims
 
 1. Reuse a persistent connection; reconnect cost is not a hot-path design.
