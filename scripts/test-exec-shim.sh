@@ -23,6 +23,7 @@ loader=$(
         sed -n 's/.*Requesting program interpreter: \(.*\)]/\1/p'
 )
 [[ $loader == /* && -x $loader ]] || die "invalid host loader: $loader"
+target_real=$(realpath -e "$target") || die "unable to resolve target: $target"
 
 for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
     mode_target=$target
@@ -44,6 +45,8 @@ for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
             LD_PRELOAD="$shim" \
             TGCOMPAT_LD_SO="$loader" \
             TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+            TGCOMPAT_PROC_SELF_EXE=/deliberately/wrong \
+            TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
             "$driver" "$mode" "$mode_target"
     )
     [[ $output == 'exec shim target: PASS' ]] ||

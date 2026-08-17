@@ -58,7 +58,11 @@ enum wrap_result {
 struct loader_invocation {
     char **arguments;
     char *filename;
+    char **environment;
+    char *proc_self_exe_assignment;
 };
+
+static const char proc_self_exe_name[] = "TGCOMPAT_PROC_SELF_EXE";
 
 static char *environment_value(char *const envp[], const char *name) {
     size_t index;
@@ -250,8 +254,15 @@ static enum wrap_result build_loader_arguments(const char *filename,
     char *filename_copy;
     char **loader_argv;
     size_t argument_count = 0;
+    size_t environment_count = 0;
+    size_t environment_keep_count = 0;
     size_t output_index = 0;
     size_t input_index;
+    size_t name_length = sizeof(proc_self_exe_name) - 1U;
+    size_t original_path_length;
+    char *original_path;
+    char *assignment;
+    char **loader_environment;
 
     loader = environment_value(envp, "TGCOMPAT_LD_SO");
     if (!should_wrap(filename, envp)) {
@@ -265,6 +276,20 @@ static enum wrap_result build_loader_arguments(const char *filename,
         }
         ++argument_count;
     }
+    if (envp != NULL) {
+        while (envp[environment_count] != NULL) {
+            if (environment_count == SIZE_MAX - 2U) {
+                errno = E2BIG;
+                return WRAP_ERROR;
+            }
+            if (strncmp(envp[environment_count], proc_self_exe_name,
+                    name_length) != 0 ||
+                    envp[environment_count][name_length] != '=') {
+                ++environment_keep_count;
+            }
+            ++environment_count;
+        }
+    }
 
     library_path = environment_value(envp, "TGCOMPAT_LIBRARY_PATH");
     filename_copy = strdup(filename);
@@ -276,7 +301,49 @@ static enum wrap_result build_loader_arguments(const char *filename,
         free(filename_copy);
         return WRAP_ERROR;
     }
+    original_path = realpath(filename, NULL);
+    if (original_path == NULL) {
+        free(filename_copy);
+        free(loader_argv);
+        return WRAP_ERROR;
+    }
+    original_path_length = strlen(original_path);
+    if (original_path_length > SIZE_MAX - name_length - 2U) {
+        free(original_path);
+        free(filename_copy);
+        free(loader_argv);
+        errno = ENAMETOOLONG;
+        return WRAP_ERROR;
+    }
+    assignment = malloc(name_length + original_path_length + 2U);
+    loader_environment = calloc(environment_keep_count + 2U,
+        sizeof(*loader_environment));
+    if (assignment == NULL || loader_environment == NULL) {
+        free(loader_environment);
+        free(assignment);
+        free(original_path);
+        free(filename_copy);
+        free(loader_argv);
+        return WRAP_ERROR;
+    }
+    memcpy(assignment, proc_self_exe_name, name_length);
+    assignment[name_length] = '=';
+    memcpy(assignment + name_length + 1U, original_path,
+        original_path_length + 1U);
+    free(original_path);
 
+    output_index = 0;
+    for (input_index = 0; input_index < environment_count; ++input_index) {
+        if (strncmp(envp[input_index], proc_self_exe_name, name_length) == 0 &&
+                envp[input_index][name_length] == '=') {
+            continue;
+        }
+        loader_environment[output_index++] = envp[input_index];
+    }
+    loader_environment[output_index++] = assignment;
+    loader_environment[output_index] = NULL;
+
+    output_index = 0;
     loader_argv[output_index++] = loader;
     loader_argv[output_index++] = "--inhibit-cache";
     loader_argv[output_index++] = "--argv0";
@@ -294,6 +361,8 @@ static enum wrap_result build_loader_arguments(const char *filename,
 
     invocation->arguments = loader_argv;
     invocation->filename = filename_copy;
+    invocation->environment = loader_environment;
+    invocation->proc_self_exe_assignment = assignment;
     return WRAP_YES;
 }
 
@@ -303,8 +372,12 @@ static void free_loader_arguments(struct loader_invocation *invocation) {
     }
     free(invocation->filename);
     free(invocation->arguments);
+    free(invocation->proc_self_exe_assignment);
+    free(invocation->environment);
     invocation->filename = NULL;
     invocation->arguments = NULL;
+    invocation->proc_self_exe_assignment = NULL;
+    invocation->environment = NULL;
 }
 
 __attribute__((visibility("default"))) int execve(const char *filename,
@@ -330,7 +403,8 @@ __attribute__((visibility("default"))) int execve(const char *filename,
         return -1;
     }
 
-    result = real_execve(invocation.arguments[0], invocation.arguments, envp);
+    result = real_execve(invocation.arguments[0], invocation.arguments,
+        invocation.environment);
     saved_errno = errno;
     free_loader_arguments(&invocation);
     errno = saved_errno;
@@ -540,7 +614,7 @@ static int spawn_wrapped(posix_spawn_function function, pid_t *pid,
         return function(pid, path, file_actions, attributes, argv, envp);
     }
     result = function(pid, invocation.arguments[0], file_actions, attributes,
-        invocation.arguments, envp);
+        invocation.arguments, invocation.environment);
     free_loader_arguments(&invocation);
     return result;
 }
