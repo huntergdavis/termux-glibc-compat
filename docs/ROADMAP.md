@@ -36,11 +36,11 @@
 ## Milestone 3: native Steam client
 
 - [x] Inventory the ARM64 bootstrap and CEF library/path requirements
-- [ ] Launch updater/client directly through the patched glibc loader
-- [ ] Preserve the existing authenticated state without copying secrets into
+- [x] Launch updater/client directly through the patched glibc loader
+- [x] Preserve the existing authenticated state without copying secrets into
       logs or the repository
-- [ ] Validate D-Bus, X11, audio, networking, and CEF independently
-- [ ] Prove there is no PRoot tracer in the process tree
+- [x] Validate D-Bus, X11, audio, networking, and CEF independently
+- [x] Prove there is no PRoot tracer in the Steam-host process tree
 
 ## Milestone 4: runtime and games
 
@@ -49,3 +49,5 @@
 - [ ] Re-run the Tomb Raider built-in benchmark with matched settings and
       thermal state
 - [ ] Publish CPU, GPU, memory, frame-time, and correctness comparisons
+- [ ] Replace the remaining PRoot Runtime/Proton filesystem boundary without
+      relying on Android-denied user or mount namespaces

@@ -65,10 +65,35 @@ built-in warmup measured:
 
 This establishes that the native service and optimized client execute on the
 target. The official patched glibc package now also passes its extracted public
-API suite, and the native Steam/CEF dependency preflight passes through its
-content-addressed loader. It is still not a PRoot-versus-native Steam result:
-an interactive client launch and matched game benchmark are required for that
-claim.
+API suite. The authenticated Steam/CEF host now runs through its
+content-addressed loader without a Steam-host PRoot tracer.
+
+## 2026-08-17 native Steam and preliminary game measurements
+
+The controlled native-host Tomb Raider launch reached the first 2800x1752 game
+window 58.256 seconds after the Runtime request, versus 407.236 seconds in the
+earlier all-PRoot observation. That interval is 85.7% shorter, or 6.99x as
+fast. This is a startup result, not an FPS result.
+
+Two game-authored warm-ups at 2800x1752 Low, V-Sync off reported:
+
+| Pass | Minimum | Maximum | Average |
+|---|---:|---:|---:|
+| Warm-up 1 | 15.6 | 32.9 | 23.6 |
+| Warm-up 2 | 5.3 | 32.0 | 24.2 |
+| Mean of warm-up averages | | | **23.9** |
+
+The earlier PRoot-host three-run mean was 22.2 FPS average. The preliminary
+native-host point estimate is 7.7% higher, but it is not a matched-series
+claim: the samples are warm-ups, not recorded passes, and Warm-up 1 ended at
+73.9 C with CPU and GPU policy throttled. One warm-up plus three recorded
+passes with automatic cooldown remains the acceptance gate.
+
+Process evidence explains why startup and FPS moved differently. Steam itself
+is native glibc now, while the game still enters Runtime/Proton/FEX through one
+explicit PRoot filesystem process because unrooted Android rejects the needed
+Bubblewrap namespaces. Removing that remaining game-boundary tracer is the next
+structural performance experiment.
 
 ## Rules for performance claims
 

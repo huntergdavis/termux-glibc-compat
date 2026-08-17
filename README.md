@@ -6,8 +6,9 @@ unrooted Termux app sandbox—without putting every syscall through PRoot's
 
 This is an early research and implementation project. The native glibc patch
 now passes its public API suite from an official Termux package on the tablet,
-and the native Steam/CEF dependency preflight passes. An interactive native
-Steam launch and matched game benchmark are still pending.
+and the authenticated Steam client plus CEF now run through that loader without
+a Steam-host PRoot tracer. A thermally matched three-run game benchmark is still
+pending; the Proton game boundary currently retains one explicit PRoot process.
 
 ## Why this exists
 
@@ -108,6 +109,33 @@ depot, and saved login state remain unchanged. See the
 The integration overlay and its exact upstream pin are documented in
 [`integration/termux-glibc/README.md`](integration/termux-glibc/README.md).
 See also [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+## Native Steam and preliminary Tomb Raider result
+
+The content-addressed glibc host now runs the real authenticated ARM64 Steam
+client, CEF, networking, X11, and PulseAudio while retaining the saved login.
+The controlled Tomb Raider launch reached the real executable 29.244 seconds
+after the Runtime request and its first 2800x1752 window at 58.256 seconds.
+The earlier all-PRoot observation needed 407.236 seconds to reach the window:
+the native-host launch interval is **85.7% shorter, or 6.99x as fast**. The
+schema-v2 timing artifact is retained in the companion repository:
+[`tomb-raider-native-supervised-cold-20260817.json`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/launch-timings/tomb-raider-native-supervised-cold-20260817.json).
+
+Two game-authored panel-native Low warm-ups reported 15.6/32.9/23.6 and
+5.3/32.0/24.2 FPS, a 23.9 FPS average-of-averages. The prior PRoot-host
+three-run mean was 22.2 FPS, so the preliminary point estimate is 7.7% higher.
+That is **not** a controlled FPS conclusion: these are warm-ups rather than
+three recorded passes, minimum FPS remains noisy, and the first warm-up ended
+at 73.9 C with CPU and GPU policy throttled. The automated runner now requires
+matched starting temperature and full CPU/GPU policy between every pass.
+
+This result also narrows the remaining engineering work. Native glibc removed
+PRoot from Steam, but Android denied Bubblewrap's user namespace with `EINVAL`
+and mount namespace with `EPERM`. The Runtime/Proton/FEX path therefore still
+uses the existing PRoot filesystem boundary. Removing that hot-path tracer
+requires a bindless preconstructed Runtime/Proton launch layout or another
+userspace containment design; additional semaphore or robust-list emulation
+alone cannot grant the kernel namespaces.
 
 `build/libtgcompat-exec.so` is an execution-boundary helper, not a syscall
 emulator. It reads only the target ELF header at launch time and wraps matching
