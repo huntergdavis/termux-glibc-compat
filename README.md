@@ -86,7 +86,7 @@ The first milestone is checked in:
 
 The first native Tab S8+ run is also captured: pthreads and cross-process SysV
 shared memory pass; robust-list and SysV semaphore calls return `ENOSYS`. This
-confirms that semaphore compatibility is the first implementation target. See
+established the original compatibility baseline. See
 the [raw result](docs/results/2026-08-16-tab-s8plus-glibc-2.42.txt).
 
 The native Bionic broker is now built and execution-tested on the same tablet.
@@ -124,6 +124,14 @@ shim retries only that exact read-directory failure. This moved native
 Pressure Vessel to Bubblewrap on the Tab S8+, but the kernel then returned
 `EINVAL` for user namespaces and `EPERM` for mount namespaces. It is therefore
 tested groundwork, not a replacement for the game-boundary PRoot process.
+
+`build/libtgcompat-robust.so` is a narrowly gated Steam compatibility
+experiment. Valve's ARM64 IPC code queries `get_robust_list(0, ...)` and aborts
+when Termux glibc returns `ENOSYS`. With `TGCOMPAT_ROBUST_LIST=1`, the shim
+returns a separate, lazily initialized Linux-compatible head for each thread
+and forwards every other syscall. This satisfies the userspace list contract
+Steam checks, but Android still does not register the head with the kernel.
+Kernel owner-death recovery is therefore not claimed.
 
 ## Run the broker
 

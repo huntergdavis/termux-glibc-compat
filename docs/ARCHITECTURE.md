@@ -105,12 +105,15 @@ the broker's `SO_PEERCRED` PID remains authoritative for `GETPID` semantics.
 ## Robust lists
 
 The current Termux glibc package removes NPTL robust-list registration and
-marks it unavailable. Ordinary pthread mutexes still use futexes. We preserve
-that known fallback and test pthread creation separately from the raw robust-
-list syscall.
+marks it unavailable. Ordinary pthread mutexes still use futexes. The opt-in
+`libtgcompat-robust.so` experiment supplies Steam with an independent,
+thread-local robust head because Valve's IPC implementation treats `ENOSYS` as
+fatal. The head has the 24-byte Linux layout and `-32` futex offset that Steam
+validates; unrelated syscalls pass through unchanged.
 
-Robust process-shared mutex recovery is not claimed. If a target application
-proves it needs that behavior, it becomes a separately measured requirement;
+Robust process-shared mutex recovery is not claimed because Android's kernel
+does not know about the synthetic head. If a target application proves it
+needs owner-death behavior, it becomes a separately measured requirement;
 we will not report a fake registration as equivalent to kernel owner-death
 handling.
 
