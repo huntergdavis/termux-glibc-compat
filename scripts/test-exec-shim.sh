@@ -25,6 +25,22 @@ loader=$(
 [[ $loader == /* && -x $loader ]] || die "invalid host loader: $loader"
 target_real=$(realpath -e "$target") || die "unable to resolve target: $target"
 
+guest_loader=/no/tgcompat-direct-loader.so
+for mode in execve-loader posix_spawn-loader; do
+    output=$(
+        env \
+            LD_PRELOAD="$shim" \
+            TGCOMPAT_LD_SO="$loader" \
+            TGCOMPAT_EXEC_MATCH_INTERPRETER="$guest_loader" \
+            TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
+            TGCOMPAT_PROC_SELF_EXE="$target_real" \
+            TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
+            "$driver" "$mode" "$guest_loader" "$target"
+    )
+    [[ $output == 'exec shim target: PASS' ]] ||
+        die "$mode direct loader redirect produced unexpected output: $output"
+done
+
 for mode in execve execv execvp execvpe execl posix_spawn posix_spawnp; do
     mode_target=$target
     mode_path=$PATH

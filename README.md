@@ -172,6 +172,10 @@ rebuilding a game environment. Leaving it unset in both places preserves the
 caller's environment. The test fixture gives its
 target a deliberately nonexistent interpreter and verifies direct, PATH-based,
 variadic, and spawned child launches through the real selected loader.
+Direct execution or `posix_spawn` of that configured guest interpreter path is
+also redirected to `TGCOMPAT_LD_SO`; this covers launchers that invoke
+`/lib/ld-linux-aarch64.so.1` themselves instead of relying on an ELF
+`PT_INTERP` entry.
 `TGCOMPAT_EXEC_SHELL=/absolute/glibc/sh` additionally redirects only exact
 `/bin/sh` and `/usr/bin/sh` requests before that ELF decision. This opt-in is
 for launchers that hard-code an Android-visible shell even though the command

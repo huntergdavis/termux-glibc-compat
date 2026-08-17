@@ -70,17 +70,41 @@ int main(int argc, char **argv) {
         (char *)"beta",
         NULL,
     };
+    char *loader_arguments[] = {
+        argc > 2 ? argv[2] : NULL,
+        (char *)"--argv0",
+        (char *)"tgcompat-preserved-argv0",
+        argc > 3 ? argv[3] : NULL,
+        (char *)"alpha",
+        (char *)"beta",
+        NULL,
+    };
 
     pid_t child;
     int status;
     int result;
 
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s MODE TARGET\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr, "usage: %s MODE TARGET [LOADER-TARGET]\n", argv[0]);
         return 2;
     }
 
-    if (strcmp(argv[1], "execve") == 0) {
+    if (strcmp(argv[1], "execve-loader") == 0 && argc == 4) {
+        execve(argv[2], loader_arguments, environ);
+    } else if (strcmp(argv[1], "posix_spawn-loader") == 0 && argc == 4) {
+        result = posix_spawn(&child, argv[2], NULL, NULL, loader_arguments,
+            environ);
+        if (result != 0) {
+            errno = result;
+            perror("exec-shim loader posix_spawn");
+            return 111;
+        }
+        if (waitpid(child, &status, 0) != child) {
+            perror("exec-shim loader waitpid");
+            return 111;
+        }
+        return WIFEXITED(status) ? WEXITSTATUS(status) : 111;
+    } else if (strcmp(argv[1], "execve") == 0 && argc == 3) {
         execve(argv[2], child_arguments, environ);
     } else if (strcmp(argv[1], "execve-filter-path-control") == 0) {
         char **filtered = environment_without_two(

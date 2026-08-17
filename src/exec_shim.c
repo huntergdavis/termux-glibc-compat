@@ -69,6 +69,9 @@ static const char shell_redirect_name[] = "TGCOMPAT_EXEC_SHELL";
 static const char path_from_name[] = "TGCOMPAT_EXEC_PATH_FROM";
 static const char path_to_name[] = "TGCOMPAT_EXEC_PATH_TO";
 
+static bool interpreter_matches(const char *interpreter,
+    char *const envp[]);
+
 static char *environment_value(char *const envp[], const char *name) {
     size_t index;
     size_t name_length;
@@ -135,11 +138,22 @@ static const char *redirect_configured_path(const char *filename,
 static const char *redirect_exec_path(const char *filename,
         char *const envp[]) {
     const char *redirect = redirect_configured_path(filename, envp);
+    char *loader;
 
     if (redirect != filename) {
         return redirect;
     }
-    return redirect_shell_path(filename, envp);
+    redirect = redirect_shell_path(filename, envp);
+    if (redirect != filename || filename == NULL ||
+            disabled_by_environment(envp) ||
+            !interpreter_matches(filename, envp)) {
+        return redirect;
+    }
+    loader = environment_value(envp, "TGCOMPAT_LD_SO");
+    if (loader == NULL || loader[0] != '/' || loader[1] == '\0') {
+        return filename;
+    }
+    return loader;
 }
 
 static bool interpreter_matches(const char *interpreter,
@@ -510,7 +524,7 @@ __attribute__((visibility("default"))) int execve(const char *filename,
 
     wrap = build_loader_arguments(filename, argv, envp, &invocation);
     if (wrap == WRAP_NO) {
-        return real_execve(filename, argv, envp);
+        return real_execve(redirect_exec_path(filename, envp), argv, envp);
     }
     if (wrap == WRAP_ERROR) {
         return -1;
@@ -724,7 +738,8 @@ static int spawn_wrapped(posix_spawn_function function, pid_t *pid,
         return errno != 0 ? errno : ENOMEM;
     }
     if (wrap == WRAP_NO) {
-        return function(pid, path, file_actions, attributes, argv, envp);
+        return function(pid, redirect_exec_path(path, envp), file_actions,
+            attributes, argv, envp);
     }
     result = function(pid, invocation.arguments[0], file_actions, attributes,
         invocation.arguments, invocation.environment);
