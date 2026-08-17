@@ -136,9 +136,14 @@ and
 At the same 59.97 Hz state, a bundled-Proton FEX repeat required the warm-up
 and every recorded pass to start below a fixed 40 C ceiling. It averaged
 12.500/32.967/23.567 FPS from 37.0-37.6 C starts, 6.4% below `safe` at
-25.167 FPS; average-FPS medians were 22.8 and 25.3. `safe` remains the selected
-profile. The exact matched series is retained as
-[`tombraider-native-glibc-proton-60hz-40c-20260817.json`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-proton-60hz-40c-20260817.json).
+25.167 FPS; average-FPS medians were 22.8 and 25.3. A subsequent matched `fast`
+profile series averaged 16.367/32.300/23.800 FPS from three 37.0 C starts. It
+was 5.4% below `safe`, only 1.0% above bundled Proton, and had a 23.0 FPS
+average median. `safe` remains the selected profile. The exact matched series
+are retained as the
+[`bundled-Proton artifact`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-proton-60hz-40c-20260817.json)
+and
+[`fast artifact`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-fast-60hz-40c-20260817.json).
 
 The display change improved throughput but did not eliminate thermal policy
 loss. Every recorded pass in both series began at full CPU/GPU policy and ended

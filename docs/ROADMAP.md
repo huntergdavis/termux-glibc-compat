@@ -48,6 +48,7 @@
 - [x] Document the required PRoot boundary for Pressure Vessel/Proton/FEX
 - [x] Re-run the Tomb Raider built-in benchmark with matched settings and
       thermal state
-- [ ] Publish CPU, GPU, memory, frame-time, and correctness comparisons
+- [x] Publish CPU, GPU, memory, FPS, thermal, and correctness comparisons
+- [ ] Add frame-time capture that does not contaminate the timed comparison
 - [ ] Replace the remaining PRoot Runtime/Proton filesystem boundary without
       relying on Android-denied user or mount namespaces

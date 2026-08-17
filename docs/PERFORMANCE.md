@@ -124,6 +124,22 @@ profile selection uses the three-run mean and median. The
 [`matched Proton series`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-proton-60hz-40c-20260817.json)
 preserves the exact evidence.
 
+The matched `fast` profile then reported 17.6/33.9/25.5,
+16.3/33.9/23.0, and 15.2/29.1/22.9 FPS. Its aggregate was
+16.367/32.300/23.800 FPS, 5.4% below `safe` in average FPS and only 1.0% above
+bundled Proton. Average-FPS median was 23.0 versus `safe` at 25.3. Every
+recorded pass began at exactly 37.0 C with full CPU/GPU policy and GPU thermal
+level zero; end temperatures were 63.3, 59.5, and 60.5 C. Available RAM after
+the final pass was 3,175,508 KiB, so the result was not memory-pressure or OOM
+limited. The correctness-risking TSO-off profile remains opt-in, and `safe`
+remains selected. The
+[`matched fast series`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-fast-60hz-40c-20260817.json)
+preserves the exact evidence.
+
+This completes the bounded FEX-profile phase without closing the performance
+gap. The next structural experiment remains removal or reduction of the
+explicit game-boundary PRoot tracer.
+
 ## Rules for performance claims
 
 1. Reuse a persistent connection; reconnect cost is not a hot-path design.
