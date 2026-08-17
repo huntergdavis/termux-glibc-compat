@@ -32,7 +32,9 @@ git -C glibc-packages checkout 954c6b200aa001088fcc420550b9304dd81229b8
 The installer dry-runs both patches, validates every source input, refuses a
 dirty target tree, and then copies the current tested protocol/transport/client
 sources into `gpkg/glibc`. The package recipe applies the semaphore entry-point
-patch after the existing fake-syscall patch.
+patch after the existing fake-syscall patch. The overlay also restores
+Termux's configured make job count to the glibc recipe's overridden build step,
+so clean package rebuilds compile in parallel without changing release flags.
 
 At runtime, export an absolute socket path before starting a glibc process:
 

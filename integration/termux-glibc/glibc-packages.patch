@@ -23,6 +23,9 @@ diff --git a/gpkg/glibc/build.sh b/gpkg/glibc/build.sh
  	# `fakesyscall.json` - json file that stores a list of unsupported syscalls for Termux in keys,
  	# the name of which indicates the fakesyscall function and how it will be launched
  	# == Syntax ==
+@@ -153 +168 @@ termux_step_make() {
+-	make -O
++	make -j "$TERMUX_PKG_MAKE_PROCESSES" -O
 diff --git a/gpkg/glibc/sysvipc-Makefile.patch b/gpkg/glibc/sysvipc-Makefile.patch
 --- a/gpkg/glibc/sysvipc-Makefile.patch
 +++ b/gpkg/glibc/sysvipc-Makefile.patch
