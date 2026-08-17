@@ -67,6 +67,19 @@ output=$(
 [[ $output == 'exec shim target: PASS' ]] ||
     die "LD_PRELOAD override produced unexpected output: $output"
 
+output=$(
+    env \
+        LD_PRELOAD="$shim:/deliberately/wrong-preload.so" \
+        TGCOMPAT_LD_SO="$loader" \
+        TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+        TGCOMPAT_EXEC_LD_PRELOAD="$shim" \
+        TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
+        TGCOMPAT_EXPECT_PROC_SELF_EXE="$target_real" \
+        "$driver" execve-filter-control "$target" 2>/dev/null
+)
+[[ $output == 'exec shim target: PASS' ]] ||
+    die "process-level LD_PRELOAD policy produced unexpected output: $output"
+
 if env \
         LD_PRELOAD="$shim" \
         TGCOMPAT_LD_SO="$loader" \

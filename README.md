@@ -116,7 +116,10 @@ patched or copied. `TGCOMPAT_LIBRARY_PATH` supplies the loader search path and
 `TGCOMPAT_EXEC_DISABLE=1` is a fail-safe bypass. When a host rewrites
 `LD_PRELOAD` for a child with incompatible objects, an explicitly supplied
 `TGCOMPAT_EXEC_LD_PRELOAD` replaces that child value only at a wrapped Linux
-ELF boundary; leaving it unset preserves the caller's environment. The test fixture gives its
+ELF boundary. An explicit child value wins; otherwise the opt-in policy is read
+from the calling process so a launcher cannot accidentally discard it while
+rebuilding a game environment. Leaving it unset in both places preserves the
+caller's environment. The test fixture gives its
 target a deliberately nonexistent interpreter and verifies direct, PATH-based,
 variadic, and spawned child launches through the real selected loader.
 

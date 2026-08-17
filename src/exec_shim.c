@@ -284,6 +284,10 @@ static enum wrap_result build_loader_arguments(const char *filename,
     }
     ld_preload_override = environment_value(
         envp, "TGCOMPAT_EXEC_LD_PRELOAD");
+    if (ld_preload_override == NULL) {
+        ld_preload_override = environment_value(
+            environ, "TGCOMPAT_EXEC_LD_PRELOAD");
+    }
     if (envp != NULL) {
         while (envp[environment_count] != NULL) {
             if (environment_count == SIZE_MAX - 3U) {

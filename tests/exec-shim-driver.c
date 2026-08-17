@@ -3,11 +3,37 @@
 #include <errno.h>
 #include <spawn.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 extern char **environ;
+
+static char **environment_without(const char *name) {
+    size_t count = 0;
+    size_t index;
+    size_t output = 0;
+    size_t name_length = strlen(name);
+    char **filtered;
+
+    while (environ[count] != NULL) {
+        ++count;
+    }
+    filtered = calloc(count + 1U, sizeof(*filtered));
+    if (filtered == NULL) {
+        return NULL;
+    }
+    for (index = 0; index < count; ++index) {
+        if (strncmp(environ[index], name, name_length) == 0 &&
+                environ[index][name_length] == '=') {
+            continue;
+        }
+        filtered[output++] = environ[index];
+    }
+    filtered[output] = NULL;
+    return filtered;
+}
 
 int main(int argc, char **argv) {
     char *child_arguments[] = {
@@ -28,6 +54,15 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "execve") == 0) {
         execve(argv[2], child_arguments, environ);
+    } else if (strcmp(argv[1], "execve-filter-control") == 0) {
+        char **filtered = environment_without("TGCOMPAT_EXEC_LD_PRELOAD");
+
+        if (filtered == NULL) {
+            perror("exec-shim filtered environment");
+            return 111;
+        }
+        execve(argv[2], child_arguments, filtered);
+        free(filtered);
     } else if (strcmp(argv[1], "execv") == 0) {
         execv(argv[2], child_arguments);
     } else if (strcmp(argv[1], "execvp") == 0) {
