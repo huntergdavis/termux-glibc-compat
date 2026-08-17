@@ -204,6 +204,14 @@ other syscall. This satisfies the userspace list contract Steam checks, but
 Android still does not register the head with the kernel. Kernel owner-death
 recovery is therefore not claimed.
 
+The same syscall-boundary shim has a separate
+`TGCOMPAT_USERFAULTFD_ENOSYS=1` policy for Android. It returns `ENOSYS` only
+for the native `userfaultfd` number and Proton 11 ARM64's temporary-header
+fallback number 374. Proton uses this optional probe for kernel write-watch;
+Wine already disables that optimization when the call returns an error.
+Android's app seccomp policy raises fatal `SIGSYS` instead, so the shim restores
+the failure contract without attempting to emulate userfaultfd.
+
 ## Run the broker
 
 The socket directory is part of the security boundary. It must belong to the

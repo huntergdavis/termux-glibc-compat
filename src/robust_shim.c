@@ -16,6 +16,10 @@ typedef long (*syscall_function)(long, ...);
 
 static syscall_function real_syscall;
 static bool robust_list_enabled;
+static bool userfaultfd_enosys_enabled;
+
+/* Valve Proton 11's temporary UFFD header uses ARM32's number on AArch64. */
+#define PROTON_ARM64_USERFAULTFD_SYSCALL 374L
 
 struct pthread_compatible_robust_list {
     struct robust_list *previous;
@@ -35,8 +39,11 @@ static void resolve_syscall(void) {
 
 __attribute__((constructor)) static void initialize_robust_shim(void) {
     const char *value = getenv("TGCOMPAT_ROBUST_LIST");
+    const char *userfaultfd_value = getenv("TGCOMPAT_USERFAULTFD_ENOSYS");
 
     robust_list_enabled = value != NULL && strcmp(value, "1") == 0;
+    userfaultfd_enosys_enabled = userfaultfd_value != NULL &&
+        strcmp(userfaultfd_value, "1") == 0;
     resolve_syscall();
 }
 
@@ -96,6 +103,16 @@ __attribute__((visibility("default"))) long syscall(long number, ...) {
     long result;
 
     va_start(arguments, number);
+    if (userfaultfd_enosys_enabled &&
+            (number == PROTON_ARM64_USERFAULTFD_SYSCALL
+#ifdef SYS_userfaultfd
+            || number == SYS_userfaultfd
+#endif
+            )) {
+        errno = ENOSYS;
+        va_end(arguments);
+        return -1;
+    }
     if (robust_list_enabled && number == SYS_get_robust_list) {
         va_list emulation_arguments;
 

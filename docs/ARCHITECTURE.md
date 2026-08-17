@@ -113,6 +113,12 @@ validates. Its container also supplies glibc's predecessor word immediately
 before the public head, which Valve uses while maintaining the list; unrelated
 syscalls pass through unchanged.
 
+`TGCOMPAT_USERFAULTFD_ENOSYS=1` independently makes the syscall shim return
+`ENOSYS` for native `userfaultfd` and Proton 11 ARM64's erroneous fallback
+number 374. This is failure-contract normalization for Android seccomp, not
+userfaultfd emulation; Wine responds by disabling its optional kernel
+write-watch path.
+
 Robust process-shared mutex recovery is not claimed because Android's kernel
 does not know about the synthetic head. If a target application proves it
 needs owner-death behavior, it becomes a separately measured requirement;

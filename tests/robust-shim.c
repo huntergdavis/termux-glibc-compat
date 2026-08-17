@@ -48,6 +48,7 @@ static void *query_from_thread(void *argument) {
 static void reexecute_with_shim(const char *shim) {
     CHECK(shim[0] == '/');
     CHECK(setenv("TGCOMPAT_ROBUST_LIST", "1", 1) == 0);
+    CHECK(setenv("TGCOMPAT_USERFAULTFD_ENOSYS", "1", 1) == 0);
     CHECK(setenv("TGCOMPAT_ROBUST_SHIM_TEST", "1", 1) == 0);
     CHECK(setenv("LD_PRELOAD", shim, 1) == 0);
     execl("/proc/self/exe", "test-robust-shim", shim, (char *)NULL);
@@ -73,6 +74,15 @@ int main(int argc, char **argv) {
         "Steam requires the 64-bit Linux robust-list ABI");
     process = syscall(SYS_getpid, 0L, 0L, 0L, 0L, 0L, 0L);
     CHECK(process == (long)getpid());
+
+    errno = 0;
+    CHECK(syscall(374L, 0x80801L, 0L, 0L, 0L, 0L, 0L) == -1);
+    CHECK(errno == ENOSYS);
+#ifdef SYS_userfaultfd
+    errno = 0;
+    CHECK(syscall(SYS_userfaultfd, 0L, 0L, 0L, 0L, 0L, 0L) == -1);
+    CHECK(errno == ENOSYS);
+#endif
 
     errno = EBUSY;
     CHECK(syscall(SYS_get_robust_list, 0L, &head, &length) == 0);
