@@ -95,14 +95,16 @@ blocking wakeups, timed waits, and process-exit `SEM_UNDO`. A 20,000-operation
 optimized pass measured 9,226 complete persistent-client `GETVAL` calls per
 second. See the [device result](docs/results/2026-08-16-tab-s8plus-native-broker.txt).
 
-The exact `glibc_2.44_aarch64.deb` has SHA-256
-`bd490b547660f7857e26a02fff168d7818e1b6d49adab37f0cc7d7566c9aed7c`.
+The current `glibc_2.44_aarch64.deb` has SHA-256
+`52f5ce13b66fc3307f48285d32b72951472493e91b96fc3e08c0c42772d999f3`.
 Its own loader resolves the public semaphore probe against only the extracted
-candidate libraries, and the full control/wakeup test passes against the
-same-UID broker. The package is selected under
+candidate libraries, and both the full control/wakeup test and upstream glibc
+2.44 `test-sysvsem` pass against the same-UID broker. This includes signal
+interruption of a blocked `semop`, reconnect after cancellation, and oversized
+timeout `EOVERFLOW` behavior. The package is selected under
 `~/.local/share/tgcompat/glibc`; the active `$PREFIX/glibc`, official Steam
 depot, and saved login state remain unchanged. See the
-[device package result](docs/results/2026-08-16-tab-s8plus-official-glibc-package.txt).
+[device package result](docs/results/2026-08-16-tab-s8plus-glibc-test-sysvsem.txt).
 The integration overlay and its exact upstream pin are documented in
 [`integration/termux-glibc/README.md`](integration/termux-glibc/README.md).
 See also [`docs/ROADMAP.md`](docs/ROADMAP.md).

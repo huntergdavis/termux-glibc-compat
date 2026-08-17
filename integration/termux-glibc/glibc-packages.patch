@@ -26,6 +26,12 @@ diff --git a/gpkg/glibc/build.sh b/gpkg/glibc/build.sh
 @@ -153 +168 @@ termux_step_make() {
 -	make -O
 +	make -j "$TERMUX_PKG_MAKE_PROCESSES" -O
+@@ -181 +196 @@ termux_step_make_install() {
+-	make install
++	make -j "$TERMUX_PKG_MAKE_PROCESSES" -O install
+@@ -218 +233 @@ termux_step_make_install_multilib() {
+-	make DESTDIR=${glibc32_dir} install
++	make -j "$TERMUX_PKG_MAKE_PROCESSES" -O DESTDIR=${glibc32_dir} install
 diff --git a/gpkg/glibc/sysvipc-Makefile.patch b/gpkg/glibc/sysvipc-Makefile.patch
 --- a/gpkg/glibc/sysvipc-Makefile.patch
 +++ b/gpkg/glibc/sysvipc-Makefile.patch

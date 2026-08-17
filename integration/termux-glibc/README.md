@@ -33,8 +33,9 @@ The installer dry-runs both patches, validates every source input, refuses a
 dirty target tree, and then copies the current tested protocol/transport/client
 sources into `gpkg/glibc`. The package recipe applies the semaphore entry-point
 patch after the existing fake-syscall patch. The overlay also restores
-Termux's configured make job count to the glibc recipe's overridden build step,
-so clean package rebuilds compile in parallel without changing release flags.
+Termux's configured make job count to the glibc recipe's overridden build and
+install steps, so clean package rebuilds and any install-time dependency
+refresh compile in parallel without changing release flags.
 
 At runtime, export an absolute socket path before starting a glibc process:
 
@@ -82,11 +83,13 @@ loader layout, prints the package hash and dependency resolution, runs the
 complete public semaphore probe, then removes only its validated temporary
 directory. Existing Steam client/config files are outside its scope.
 
-This gate passed on the Tab S8+ for the official-recipe glibc 2.44 package with
-SHA-256
-`bd490b547660f7857e26a02fff168d7818e1b6d49adab37f0cc7d7566c9aed7c`.
+This gate passed on the Tab S8+ for the signal-correct official-recipe glibc
+2.44 package with SHA-256
+`52f5ce13b66fc3307f48285d32b72951472493e91b96fc3e08c0c42772d999f3`.
 `semget`, control operations, cross-process blocking, and wakeup completed
-through the extracted candidate loader and `tgcompatd`.
+through the extracted candidate loader and `tgcompatd`. The same extracted
+package also passes upstream glibc 2.44's `test-sysvsem`, including interrupted
+blocking waits and the oversized-timeout `EOVERFLOW` check.
 
 After that test passes, stage the exact package in a content-addressed,
 user-owned directory:

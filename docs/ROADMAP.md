@@ -30,7 +30,7 @@
 - [x] Link a host glibc 2.44 `libc.so` and pass the public black-box suite
 - [x] Build through the official `termux/glibc-packages` recipe
 - [x] Run this repository's black-box suite through the extracted package
-- [ ] Run glibc's `test-sysvsem`
+- [x] Run glibc's `test-sysvsem`
 - [x] Document packaging, rollback, and coexistence with stock glibc
 
 ## Milestone 3: native Steam client
