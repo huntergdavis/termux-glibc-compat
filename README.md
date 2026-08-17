@@ -133,6 +133,13 @@ companion repository:
 and
 [`59.97 Hz A/B`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-safe-60hz-20260817.json).
 
+At the same 59.97 Hz state, a bundled-Proton FEX repeat required the warm-up
+and every recorded pass to start below a fixed 40 C ceiling. It averaged
+12.500/32.967/23.567 FPS from 37.0-37.6 C starts, 6.4% below `safe` at
+25.167 FPS; average-FPS medians were 22.8 and 25.3. `safe` remains the selected
+profile. The exact matched series is retained as
+[`tombraider-native-glibc-proton-60hz-40c-20260817.json`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-proton-60hz-40c-20260817.json).
+
 The display change improved throughput but did not eliminate thermal policy
 loss. Every recorded pass in both series began at full CPU/GPU policy and ended
 with the GPU capped at 492 MHz/thermal level six. The 60 Hz improvement may

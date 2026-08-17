@@ -114,6 +114,16 @@ The exact game series live in the companion repository:
 and
 [`59.97 Hz A/B`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-safe-60hz-20260817.json).
 
+A fixed-40 C bundled-Proton profile repeat at 59.97 Hz then reported
+5.1/34.7/22.8, 14.4/30.8/22.7, and 18.0/33.4/25.2 FPS. Its aggregate was
+12.500/32.967/23.567 FPS, 6.4% below `safe` in average FPS; average-FPS median
+was 22.8 versus 25.3. Every pass began at 37.0-37.6 C with full CPU/GPU policy,
+so `safe` remains the accepted native-resolution profile. The 5.1 FPS minimum
+belonged to a pass ending at 83.8 C and thermal level six, illustrating why
+profile selection uses the three-run mean and median. The
+[`matched Proton series`](https://github.com/huntergdavis/steamclienttermux/blob/main/docs/benchmark-series/tombraider-native-glibc-proton-60hz-40c-20260817.json)
+preserves the exact evidence.
+
 ## Rules for performance claims
 
 1. Reuse a persistent connection; reconnect cost is not a hot-path design.
