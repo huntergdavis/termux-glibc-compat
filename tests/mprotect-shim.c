@@ -7,14 +7,18 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "temp-path.h"
+
 int main(void) {
     long page_size = sysconf(_SC_PAGESIZE);
-    char template[] = "/tmp/tgcompat-mprotect.XXXXXX";
+    char template[TGC_TEST_PATH_CAPACITY];
     unsigned char *mapping;
     int descriptor;
     size_t index;
 
     assert(page_size > 0);
+    assert(tgc_test_temp_template(template, sizeof(template),
+        "tgcompat-mprotect") == 0);
     descriptor = mkstemp(template);
     assert(descriptor >= 0);
     assert(unlink(template) == 0);
