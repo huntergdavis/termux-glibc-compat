@@ -14,7 +14,7 @@
 #include "tgcompat/android_root.h"
 
 int main(void) {
-    char proc_net_template[] = "/tmp/tgcompat-proc-net-XXXXXX";
+    char proc_net_template[PATH_MAX];
     char route_path[PATH_MAX];
     char rewritten[PATH_MAX];
     char line[64];
@@ -24,7 +24,9 @@ int main(void) {
     FILE *stream;
     int descriptor;
     int retry_flags = -1;
+    int written;
     int original = O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY;
+    const char *temporary_root;
 
     assert(unsetenv("TGCOMPAT_ANDROID_ROOT_O_PATH") == 0);
     assert(!tgcompat_android_root_retry_flags("/proc/self/root", original,
@@ -60,9 +62,17 @@ int main(void) {
     mapped = tgcompat_android_root_rewrite_proc_net("/proc/net/route",
         rewritten, sizeof(rewritten));
     assert(mapped != NULL && strcmp(mapped, "/proc/net/route") == 0);
+    temporary_root = getenv("TMPDIR");
+    if (temporary_root == NULL || temporary_root[0] != '/') {
+        temporary_root = "/tmp";
+    }
+    written = snprintf(proc_net_template, sizeof(proc_net_template),
+        "%s/tgcompat-proc-net-XXXXXX", temporary_root);
+    assert(written > 0 && (size_t)written < sizeof(proc_net_template));
     assert(mkdtemp(proc_net_template) == proc_net_template);
-    assert(snprintf(route_path, sizeof(route_path), "%s/route",
-        proc_net_template) > 0);
+    written = snprintf(route_path, sizeof(route_path), "%s/route",
+        proc_net_template);
+    assert(written > 0 && (size_t)written < sizeof(route_path));
     stream = fopen(route_path, "w");
     assert(stream != NULL);
     assert(fputs("mapped-route\n", stream) >= 0);
