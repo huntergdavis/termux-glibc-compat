@@ -66,6 +66,7 @@ struct loader_invocation {
 struct environment_override {
     char **values;
     char *ld_preload_assignment;
+    char *proc_self_exe_assignment;
 };
 
 static const char ld_preload_name[] = "LD_PRELOAD";
@@ -77,6 +78,8 @@ static const char final_path_prefix_name[] =
     "TGCOMPAT_EXEC_FINAL_PATH_PREFIX";
 static const char final_ld_preload_name[] =
     "TGCOMPAT_EXEC_FINAL_LD_PRELOAD";
+static const char final_proc_self_exe_name[] =
+    "TGCOMPAT_EXEC_FINAL_PROC_SELF_EXE";
 
 static bool interpreter_matches(const char *interpreter,
     char *const envp[]);
@@ -122,30 +125,42 @@ static bool final_path_matches(const char *filename, char *const envp[]) {
 static int build_final_environment(const char *filename,
         char *const envp[], struct environment_override *override) {
     char *preload;
+    char *proc_self_exe;
     char *assignment;
+    char *proc_assignment = NULL;
     char **values;
     size_t preload_length;
+    size_t proc_self_exe_length = 0;
     size_t environment_count = 0;
     size_t keep_count = 0;
     size_t index;
     size_t output = 0;
     size_t name_length = sizeof(ld_preload_name) - 1U;
+    size_t proc_name_length = sizeof(proc_self_exe_name) - 1U;
+    bool replace_proc_self_exe;
 
     if (!final_path_matches(filename, envp)) {
         return 0;
     }
     preload = configured_environment_value(envp, final_ld_preload_name);
+    proc_self_exe = configured_environment_value(
+        envp, final_proc_self_exe_name);
+    replace_proc_self_exe = proc_self_exe != NULL;
     if (preload == NULL || envp == NULL) {
         errno = EINVAL;
         return -1;
     }
     while (envp[environment_count] != NULL) {
-        if (strncmp(envp[environment_count], ld_preload_name,
-                name_length) != 0 ||
-                envp[environment_count][name_length] != '=') {
+        if ((strncmp(envp[environment_count], ld_preload_name,
+                    name_length) != 0 ||
+                envp[environment_count][name_length] != '=') &&
+                (!replace_proc_self_exe ||
+                    strncmp(envp[environment_count], proc_self_exe_name,
+                        proc_name_length) != 0 ||
+                    envp[environment_count][proc_name_length] != '=')) {
             ++keep_count;
         }
-        if (environment_count == SIZE_MAX - 2U) {
+        if (environment_count == SIZE_MAX - 3U) {
             errno = E2BIG;
             return -1;
         }
@@ -156,34 +171,66 @@ static int build_final_environment(const char *filename,
         errno = E2BIG;
         return -1;
     }
+    if (replace_proc_self_exe) {
+        proc_self_exe_length = strlen(proc_self_exe);
+        if (proc_self_exe_length > SIZE_MAX - proc_name_length - 2U) {
+            errno = E2BIG;
+            return -1;
+        }
+    }
     assignment = malloc(name_length + preload_length + 2U);
-    values = calloc(keep_count + 2U, sizeof(*values));
-    if (assignment == NULL || values == NULL) {
+    if (replace_proc_self_exe) {
+        proc_assignment = malloc(
+            proc_name_length + proc_self_exe_length + 2U);
+    }
+    values = calloc(keep_count + (replace_proc_self_exe ? 3U : 2U),
+        sizeof(*values));
+    if (assignment == NULL || values == NULL ||
+            (replace_proc_self_exe && proc_assignment == NULL)) {
         free(values);
+        free(proc_assignment);
         free(assignment);
         return -1;
     }
     memcpy(assignment, ld_preload_name, name_length);
     assignment[name_length] = '=';
     memcpy(assignment + name_length + 1U, preload, preload_length + 1U);
+    if (replace_proc_self_exe) {
+        memcpy(proc_assignment, proc_self_exe_name, proc_name_length);
+        proc_assignment[proc_name_length] = '=';
+        memcpy(proc_assignment + proc_name_length + 1U, proc_self_exe,
+            proc_self_exe_length + 1U);
+    }
     for (index = 0; index < environment_count; ++index) {
         if (strncmp(envp[index], ld_preload_name, name_length) == 0 &&
                 envp[index][name_length] == '=') {
             continue;
         }
+        if (replace_proc_self_exe &&
+                strncmp(envp[index], proc_self_exe_name,
+                    proc_name_length) == 0 &&
+                envp[index][proc_name_length] == '=') {
+            continue;
+        }
         values[output++] = envp[index];
     }
     values[output++] = assignment;
+    if (replace_proc_self_exe) {
+        values[output++] = proc_assignment;
+    }
     values[output] = NULL;
     override->values = values;
     override->ld_preload_assignment = assignment;
+    override->proc_self_exe_assignment = proc_assignment;
     return 1;
 }
 
 static void free_environment_override(struct environment_override *override) {
     free(override->ld_preload_assignment);
+    free(override->proc_self_exe_assignment);
     free(override->values);
     override->ld_preload_assignment = NULL;
+    override->proc_self_exe_assignment = NULL;
     override->values = NULL;
 }
 

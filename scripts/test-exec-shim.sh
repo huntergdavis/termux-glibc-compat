@@ -176,9 +176,10 @@ for mode in execve posix_spawn; do
             TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
             TGCOMPAT_EXEC_FINAL_PATH_PREFIX="$final_prefix" \
             TGCOMPAT_EXEC_FINAL_LD_PRELOAD= \
+            TGCOMPAT_EXEC_FINAL_PROC_SELF_EXE= \
             TGCOMPAT_EXPECT_LD_PRELOAD= \
-            TGCOMPAT_PROC_SELF_EXE="$final_target_real" \
-            TGCOMPAT_EXPECT_PROC_SELF_EXE="$final_target_real" \
+            TGCOMPAT_PROC_SELF_EXE=/deliberately/wrong \
+            TGCOMPAT_EXPECT_PROC_SELF_EXE= \
             "$driver" "$mode" "$final_target"
     )
     [[ $output == 'exec shim target: PASS' ]] ||
