@@ -31,6 +31,10 @@ ROBUST_SHIM_CFLAGS ?= -O3 -DNDEBUG -fPIC -fvisibility=hidden \
 	-fno-semantic-interposition -ffunction-sections -fdata-sections
 ROBUST_SHIM_LDFLAGS ?= -shared -Wl,-O2,--as-needed,--gc-sections \
 	-Wl,-z,relro,-z,now
+MPROTECT_SHIM_CFLAGS ?= -O3 -DNDEBUG -fPIC -fvisibility=hidden \
+	-fno-semantic-interposition -ffunction-sections -fdata-sections
+MPROTECT_SHIM_LDFLAGS ?= -shared -Wl,-O2,--as-needed,--gc-sections \
+	-Wl,-z,relro,-z,now
 ROBUST_SHIM_ARCH_SOURCE := $(if $(findstring aarch64,$(GLIBC_MACHINE)),\
 	src/robust_shim_aarch64.S,)
 GLIBC_TEST_CFLAGS ?= -O2 -g
@@ -48,12 +52,14 @@ TESTS := build/test-sem-store build/test-protocol build/test-broker-dispatch \
 	build/test-broker-integration build/test-client
 
 .PHONY: all benchmark check check-android-root-shim check-broker \
-	check-exec-shim check-robust-shim clean exec-shim release
+	check-exec-shim check-mprotect-shim check-robust-shim clean exec-shim \
+	release
 
 all: $(PROBES) build/tgcompatd build/libtgcompat-client.a \
 	build/libtgcompat-exec.so build/libtgcompat-android-root.so \
-	build/libtgcompat-robust.so build/test-android-root-shim \
-	build/test-robust-shim $(TESTS)
+	build/libtgcompat-robust.so build/libtgcompat-mprotect.so \
+	build/test-android-root-shim build/test-robust-shim \
+	build/test-mprotect-shim $(TESTS)
 
 build:
 	mkdir -p $@
@@ -113,6 +119,10 @@ build/libtgcompat-robust.so: src/robust_shim.c $(ROBUST_SHIM_ARCH_SOURCE) | buil
 	$(GLIBC_CC) $(CPPFLAGS) $(ROBUST_SHIM_CFLAGS) $(WARNINGS) -std=c11 \
 		$^ $(ROBUST_SHIM_LDFLAGS) -ldl -o $@
 
+build/libtgcompat-mprotect.so: src/mprotect_shim.c | build
+	$(GLIBC_CC) $(CPPFLAGS) $(MPROTECT_SHIM_CFLAGS) $(WARNINGS) -std=c11 \
+		$< $(MPROTECT_SHIM_LDFLAGS) -o $@
+
 build/test-android-root-shim: tests/android-root-shim.c \
 		src/android_root_shim.c include/tgcompat/android_root.h | build
 	$(GLIBC_CC) $(CPPFLAGS) $(GLIBC_TEST_CFLAGS) $(WARNINGS) \
@@ -122,6 +132,10 @@ build/test-android-root-shim: tests/android-root-shim.c \
 build/test-robust-shim: tests/robust-shim.c | build
 	$(GLIBC_CC) $(CPPFLAGS) $(GLIBC_TEST_CFLAGS) $(WARNINGS) \
 		-std=c11 $(THREAD_FLAGS) $< -o $@
+
+build/test-mprotect-shim: tests/mprotect-shim.c src/mprotect_shim.c | build
+	$(GLIBC_CC) $(CPPFLAGS) $(GLIBC_TEST_CFLAGS) $(WARNINGS) \
+		-DTGCOMPAT_MPROTECT_TEST_FORCE_EACCES -std=c11 $^ -o $@
 
 build/test-exec-shim-driver: tests/exec-shim-driver.c | build
 	$(GLIBC_CC) $(CPPFLAGS) $(GLIBC_TEST_CFLAGS) $(WARNINGS) \
@@ -186,19 +200,24 @@ check-robust-shim: build/libtgcompat-robust.so build/test-robust-shim
 	$(GLIBC_RUN) ./build/test-robust-shim \
 		$(abspath build/libtgcompat-robust.so)
 
+check-mprotect-shim: build/test-mprotect-shim
+	$(GLIBC_RUN) ./build/test-mprotect-shim
+
 release:
 	$(MAKE) clean
 	$(MAKE) CFLAGS="$(RELEASE_CFLAGS) $(RELEASE_CPU_FLAGS)" \
 		LDFLAGS="$(RELEASE_LDFLAGS)" build/tgcompatd \
 		build/libtgcompat-client.a build/libtgcompat-exec.so \
 		build/libtgcompat-android-root.so build/libtgcompat-robust.so \
+		build/libtgcompat-mprotect.so \
 		build/benchmark-broker-roundtrip
 	$(STRIP) --strip-unneeded build/tgcompatd \
 		build/libtgcompat-exec.so build/libtgcompat-android-root.so \
-		build/libtgcompat-robust.so \
+		build/libtgcompat-robust.so build/libtgcompat-mprotect.so \
 		build/benchmark-broker-roundtrip
 
-check: all check-exec-shim check-android-root-shim check-robust-shim
+check: all check-exec-shim check-android-root-shim check-robust-shim \
+		check-mprotect-shim
 	./scripts/run-probes.sh --no-build
 	./build/test-sem-store
 	./build/test-protocol

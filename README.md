@@ -212,6 +212,18 @@ Wine already disables that optimization when the call returns an error.
 Android's app seccomp policy raises fatal `SIGSYS` instead, so the shim restores
 the failure contract without attempting to emulate userfaultfd.
 
+`build/libtgcompat-mprotect.so` handles executable mappings backed by Android
+removable or other `noexec` storage. Termux's packaged glibc replaces stock
+`mprotect` with a fallback that parses `/proc/self/maps`; its current
+[`__is_mmaped` implementation](https://github.com/termux-pacman/glibc-packages/blob/main/gpkg/glibc/mprotect.c)
+can free pointers advanced into a tokenized allocation. The resulting heap
+abort was reproduced while Wine mapped a game image from an SD-card Steam
+library. Preloading this shim makes the raw syscall first and, only for
+`EACCES` plus `PROT_EXEC`, replaces the rejected range with a byte-identical
+anonymous mapping before applying the requested protection. The fallback uses
+no heap allocation or `/proc` parsing. `make check-mprotect-shim` exercises the
+path with deterministic fault injection.
+
 ## Run the broker
 
 The socket directory is part of the security boundary. It must belong to the
