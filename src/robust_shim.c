@@ -14,12 +14,22 @@
 
 typedef long (*syscall_function)(long, ...);
 
-static syscall_function real_syscall;
-static bool robust_list_enabled;
-static bool userfaultfd_enosys_enabled;
+__attribute__((visibility("hidden"))) syscall_function tgcompat_real_syscall;
+__attribute__((visibility("hidden"))) bool tgcompat_robust_list_enabled;
+__attribute__((visibility("hidden"))) bool
+    tgcompat_userfaultfd_enosys_enabled;
 
 /* Valve Proton 11's temporary UFFD header uses ARM32's number on AArch64. */
-#define PROTON_ARM64_USERFAULTFD_SYSCALL 374L
+#define PROTON_ARM64_USERFAULTFD_SYSCALL 374
+
+#if defined(__aarch64__)
+_Static_assert(SYS_get_robust_list == 100,
+    "AArch64 robust-list syscall number changed");
+#ifdef SYS_userfaultfd
+_Static_assert(SYS_userfaultfd == 282,
+    "AArch64 userfaultfd syscall number changed");
+#endif
+#endif
 
 struct pthread_compatible_robust_list {
     struct robust_list *previous;
@@ -32,17 +42,18 @@ static _Thread_local bool synthetic_list_initialized;
 static void resolve_syscall(void) {
     void *symbol = dlsym(RTLD_NEXT, "syscall");
 
-    _Static_assert(sizeof(real_syscall) == sizeof(symbol),
+    _Static_assert(sizeof(tgcompat_real_syscall) == sizeof(symbol),
         "function and data pointers must have equal size");
-    memcpy(&real_syscall, &symbol, sizeof(real_syscall));
+    memcpy(&tgcompat_real_syscall, &symbol, sizeof(tgcompat_real_syscall));
 }
 
 __attribute__((constructor)) static void initialize_robust_shim(void) {
     const char *value = getenv("TGCOMPAT_ROBUST_LIST");
     const char *userfaultfd_value = getenv("TGCOMPAT_USERFAULTFD_ENOSYS");
 
-    robust_list_enabled = value != NULL && strcmp(value, "1") == 0;
-    userfaultfd_enosys_enabled = userfaultfd_value != NULL &&
+    tgcompat_robust_list_enabled =
+        value != NULL && strcmp(value, "1") == 0;
+    tgcompat_userfaultfd_enosys_enabled = userfaultfd_value != NULL &&
         strcmp(userfaultfd_value, "1") == 0;
     resolve_syscall();
 }
@@ -62,11 +73,9 @@ static struct robust_list_head *current_synthetic_head(void) {
     return &synthetic_list.head;
 }
 
-static long emulate_get_robust_list(va_list arguments) {
-    long process = va_arg(arguments, long);
-    struct robust_list_head **head =
-        va_arg(arguments, struct robust_list_head **);
-    size_t *length = va_arg(arguments, size_t *);
+__attribute__((visibility("hidden"), used, noinline)) long
+tgcompat_emulate_get_robust_list(
+        long process, struct robust_list_head **head, size_t *length) {
     int saved_errno = errno;
 
     if (process != 0) {
@@ -82,6 +91,16 @@ static long emulate_get_robust_list(va_list arguments) {
     return 0;
 }
 
+#if defined(__aarch64__)
+
+__attribute__((visibility("hidden"), used, noinline)) long
+tgcompat_syscall_enosys(void) {
+    errno = ENOSYS;
+    return -1;
+}
+
+#else
+
 static long forward_syscall(long number, va_list arguments) {
     long argument1 = va_arg(arguments, long);
     long argument2 = va_arg(arguments, long);
@@ -90,11 +109,12 @@ static long forward_syscall(long number, va_list arguments) {
     long argument5 = va_arg(arguments, long);
     long argument6 = va_arg(arguments, long);
 
-    if (real_syscall == NULL) {
+    if (tgcompat_real_syscall == NULL) {
         errno = ENOSYS;
         return -1;
     }
-    return real_syscall(number, argument1, argument2, argument3, argument4,
+    return tgcompat_real_syscall(number, argument1, argument2, argument3,
+        argument4,
         argument5, argument6);
 }
 
@@ -103,7 +123,7 @@ __attribute__((visibility("default"))) long syscall(long number, ...) {
     long result;
 
     va_start(arguments, number);
-    if (userfaultfd_enosys_enabled &&
+    if (tgcompat_userfaultfd_enosys_enabled &&
             (number == PROTON_ARM64_USERFAULTFD_SYSCALL
 #ifdef SYS_userfaultfd
             || number == SYS_userfaultfd
@@ -113,11 +133,17 @@ __attribute__((visibility("default"))) long syscall(long number, ...) {
         va_end(arguments);
         return -1;
     }
-    if (robust_list_enabled && number == SYS_get_robust_list) {
+    if (tgcompat_robust_list_enabled && number == SYS_get_robust_list) {
         va_list emulation_arguments;
+        long process;
+        struct robust_list_head **head;
+        size_t *length;
 
         va_copy(emulation_arguments, arguments);
-        result = emulate_get_robust_list(emulation_arguments);
+        process = va_arg(emulation_arguments, long);
+        head = va_arg(emulation_arguments, struct robust_list_head **);
+        length = va_arg(emulation_arguments, size_t *);
+        result = tgcompat_emulate_get_robust_list(process, head, length);
         va_end(emulation_arguments);
         if (result != 1) {
             va_end(arguments);
@@ -128,3 +154,5 @@ __attribute__((visibility("default"))) long syscall(long number, ...) {
     va_end(arguments);
     return result;
 }
+
+#endif

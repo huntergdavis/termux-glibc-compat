@@ -1,6 +1,7 @@
 CC ?= cc
 GLIBC_CC ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),grun -s gcc,$(CC))
 GLIBC_RUN ?= $(if $(filter Android,$(shell uname -o 2>/dev/null)),grun -s,)
+GLIBC_MACHINE ?= $(shell $(GLIBC_CC) -dumpmachine 2>/dev/null)
 AR ?= ar
 CFLAGS ?= -O2 -g
 CPPFLAGS ?=
@@ -30,6 +31,8 @@ ROBUST_SHIM_CFLAGS ?= -O3 -DNDEBUG -fPIC -fvisibility=hidden \
 	-fno-semantic-interposition -ffunction-sections -fdata-sections
 ROBUST_SHIM_LDFLAGS ?= -shared -Wl,-O2,--as-needed,--gc-sections \
 	-Wl,-z,relro,-z,now
+ROBUST_SHIM_ARCH_SOURCE := $(if $(findstring aarch64,$(GLIBC_MACHINE)),\
+	src/robust_shim_aarch64.S,)
 GLIBC_TEST_CFLAGS ?= -O2 -g
 
 WARNINGS := -Wall -Wextra -Werror -Wpedantic -Wcast-qual -Wformat=2 \
@@ -106,9 +109,9 @@ build/libtgcompat-android-root.so: src/android_root_shim.c \
 	$(GLIBC_CC) $(CPPFLAGS) $(ANDROID_ROOT_SHIM_CFLAGS) $(WARNINGS) \
 		-Iinclude -std=c11 $< $(ANDROID_ROOT_SHIM_LDFLAGS) -ldl -o $@
 
-build/libtgcompat-robust.so: src/robust_shim.c | build
+build/libtgcompat-robust.so: src/robust_shim.c $(ROBUST_SHIM_ARCH_SOURCE) | build
 	$(GLIBC_CC) $(CPPFLAGS) $(ROBUST_SHIM_CFLAGS) $(WARNINGS) -std=c11 \
-		$< $(ROBUST_SHIM_LDFLAGS) -ldl -o $@
+		$^ $(ROBUST_SHIM_LDFLAGS) -ldl -o $@
 
 build/test-android-root-shim: tests/android-root-shim.c \
 		src/android_root_shim.c include/tgcompat/android_root.h | build
