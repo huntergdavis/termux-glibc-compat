@@ -7,13 +7,14 @@ repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 shim=$repo_dir/build/libtgcompat-exec.so
 driver=$repo_dir/build/test-exec-shim-driver
 target=$repo_dir/build/test-exec-shim-target
+final_target=$repo_dir/build/test-exec-shim-final-target
 
 die() {
     printf 'test-exec-shim: %s\n' "$*" >&2
     exit 1
 }
 
-for path in "$shim" "$driver" "$target"; do
+for path in "$shim" "$driver" "$target" "$final_target"; do
     [[ -f $path && ! -L $path ]] || die "missing build artifact: $path"
 done
 command -v readelf >/dev/null 2>&1 || die 'readelf is required'
@@ -24,6 +25,9 @@ loader=$(
 )
 [[ $loader == /* && -x $loader ]] || die "invalid host loader: $loader"
 target_real=$(realpath -e "$target") || die "unable to resolve target: $target"
+final_target_real=$(realpath -e "$final_target") ||
+    die "unable to resolve final target: $final_target"
+final_prefix=${final_target_real%/*}/
 
 guest_loader=/no/tgcompat-direct-loader.so
 for mode in execve-loader posix_spawn-loader; do
@@ -163,5 +167,37 @@ if env \
         "$driver" execve "$target" >/dev/null 2>&1; then
     die 'TGCOMPAT_EXEC_DISABLE did not bypass the shim'
 fi
+
+for mode in execve posix_spawn; do
+    output=$(
+        env \
+            LD_PRELOAD="$shim" \
+            TGCOMPAT_LD_SO="$loader" \
+            TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+            TGCOMPAT_EXEC_FINAL_PATH_PREFIX="$final_prefix" \
+            TGCOMPAT_EXEC_FINAL_LD_PRELOAD= \
+            TGCOMPAT_EXPECT_LD_PRELOAD= \
+            TGCOMPAT_PROC_SELF_EXE="$final_target_real" \
+            TGCOMPAT_EXPECT_PROC_SELF_EXE="$final_target_real" \
+            "$driver" "$mode" "$final_target"
+    )
+    [[ $output == 'exec shim target: PASS' ]] ||
+        die "$mode final preload boundary produced unexpected output: $output"
+done
+
+output=$(
+    env \
+        LD_PRELOAD="$shim" \
+        TGCOMPAT_LD_SO="$loader" \
+        TGCOMPAT_EXEC_MATCH_INTERPRETER=/no/tgcompat-ld.so \
+        TGCOMPAT_EXEC_FINAL_PATH_PREFIX=/no/tgcompat-final/ \
+        TGCOMPAT_EXEC_FINAL_LD_PRELOAD= \
+        TGCOMPAT_EXPECT_LD_PRELOAD="$shim" \
+        TGCOMPAT_PROC_SELF_EXE="$final_target_real" \
+        TGCOMPAT_EXPECT_PROC_SELF_EXE="$final_target_real" \
+        "$driver" execve "$final_target"
+)
+[[ $output == 'exec shim target: PASS' ]] ||
+    die "non-matching final preload boundary changed the environment: $output"
 
 printf '%s\n' 'exec shim tests: PASS'

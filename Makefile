@@ -129,6 +129,10 @@ build/test-exec-shim-target: tests/exec-shim-target.c | build
 		-std=c11 $< \
 		-Wl,--dynamic-linker=/no/tgcompat-ld.so -o $@
 
+build/test-exec-shim-final-target: tests/exec-shim-target.c | build
+	$(GLIBC_CC) $(CPPFLAGS) $(GLIBC_TEST_CFLAGS) $(WARNINGS) \
+		-std=c11 $< -o $@
+
 build/test-sem-store: tests/sem-store.c build/sem_store.o | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -Iinclude -std=c11 $^ $(LDFLAGS) -o $@
 
@@ -168,7 +172,7 @@ benchmark: build/benchmark-broker-roundtrip
 exec-shim: build/libtgcompat-exec.so
 
 check-exec-shim: build/libtgcompat-exec.so build/test-exec-shim-driver \
-		build/test-exec-shim-target
+		build/test-exec-shim-target build/test-exec-shim-final-target
 	$(BASH) ./scripts/test-exec-shim.sh
 
 check-android-root-shim: build/libtgcompat-android-root.so \

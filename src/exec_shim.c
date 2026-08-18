@@ -63,11 +63,20 @@ struct loader_invocation {
     char *proc_self_exe_assignment;
 };
 
+struct environment_override {
+    char **values;
+    char *ld_preload_assignment;
+};
+
 static const char ld_preload_name[] = "LD_PRELOAD";
 static const char proc_self_exe_name[] = "TGCOMPAT_PROC_SELF_EXE";
 static const char shell_redirect_name[] = "TGCOMPAT_EXEC_SHELL";
 static const char path_from_name[] = "TGCOMPAT_EXEC_PATH_FROM";
 static const char path_to_name[] = "TGCOMPAT_EXEC_PATH_TO";
+static const char final_path_prefix_name[] =
+    "TGCOMPAT_EXEC_FINAL_PATH_PREFIX";
+static const char final_ld_preload_name[] =
+    "TGCOMPAT_EXEC_FINAL_LD_PRELOAD";
 
 static bool interpreter_matches(const char *interpreter,
     char *const envp[]);
@@ -87,6 +96,95 @@ static char *environment_value(char *const envp[], const char *name) {
         }
     }
     return NULL;
+}
+
+static char *configured_environment_value(char *const envp[],
+        const char *name) {
+    char *value = environment_value(envp, name);
+
+    return value != NULL ? value : environment_value(environ, name);
+}
+
+static bool final_path_matches(const char *filename, char *const envp[]) {
+    char *prefix = configured_environment_value(
+        envp, final_path_prefix_name);
+    size_t prefix_length;
+
+    if (filename == NULL || filename[0] != '/' || prefix == NULL ||
+            prefix[0] != '/') {
+        return false;
+    }
+    prefix_length = strlen(prefix);
+    return prefix_length > 1U && prefix[prefix_length - 1U] == '/' &&
+        strncmp(filename, prefix, prefix_length) == 0;
+}
+
+static int build_final_environment(const char *filename,
+        char *const envp[], struct environment_override *override) {
+    char *preload;
+    char *assignment;
+    char **values;
+    size_t preload_length;
+    size_t environment_count = 0;
+    size_t keep_count = 0;
+    size_t index;
+    size_t output = 0;
+    size_t name_length = sizeof(ld_preload_name) - 1U;
+
+    if (!final_path_matches(filename, envp)) {
+        return 0;
+    }
+    preload = configured_environment_value(envp, final_ld_preload_name);
+    if (preload == NULL || envp == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    while (envp[environment_count] != NULL) {
+        if (strncmp(envp[environment_count], ld_preload_name,
+                name_length) != 0 ||
+                envp[environment_count][name_length] != '=') {
+            ++keep_count;
+        }
+        if (environment_count == SIZE_MAX - 2U) {
+            errno = E2BIG;
+            return -1;
+        }
+        ++environment_count;
+    }
+    preload_length = strlen(preload);
+    if (preload_length > SIZE_MAX - name_length - 2U) {
+        errno = E2BIG;
+        return -1;
+    }
+    assignment = malloc(name_length + preload_length + 2U);
+    values = calloc(keep_count + 2U, sizeof(*values));
+    if (assignment == NULL || values == NULL) {
+        free(values);
+        free(assignment);
+        return -1;
+    }
+    memcpy(assignment, ld_preload_name, name_length);
+    assignment[name_length] = '=';
+    memcpy(assignment + name_length + 1U, preload, preload_length + 1U);
+    for (index = 0; index < environment_count; ++index) {
+        if (strncmp(envp[index], ld_preload_name, name_length) == 0 &&
+                envp[index][name_length] == '=') {
+            continue;
+        }
+        values[output++] = envp[index];
+    }
+    values[output++] = assignment;
+    values[output] = NULL;
+    override->values = values;
+    override->ld_preload_assignment = assignment;
+    return 1;
+}
+
+static void free_environment_override(struct environment_override *override) {
+    free(override->ld_preload_assignment);
+    free(override->values);
+    override->ld_preload_assignment = NULL;
+    override->values = NULL;
 }
 
 static bool disabled_by_environment(char *const envp[]) {
@@ -510,8 +608,10 @@ static void free_loader_arguments(struct loader_invocation *invocation) {
 __attribute__((visibility("default"))) int execve(const char *filename,
         char *const argv[], char *const envp[]) {
     struct loader_invocation invocation = { 0 };
+    struct environment_override final_environment = { 0 };
     enum wrap_result wrap;
     int result;
+    int final_result;
     int saved_errno;
 
     if (real_execve == NULL) {
@@ -524,7 +624,18 @@ __attribute__((visibility("default"))) int execve(const char *filename,
 
     wrap = build_loader_arguments(filename, argv, envp, &invocation);
     if (wrap == WRAP_NO) {
-        return real_execve(redirect_exec_path(filename, envp), argv, envp);
+        final_result = build_final_environment(
+            filename, envp, &final_environment);
+        if (final_result < 0) {
+            return -1;
+        }
+        result = real_execve(
+            redirect_exec_path(filename, envp), argv,
+            final_result > 0 ? final_environment.values : envp);
+        saved_errno = errno;
+        free_environment_override(&final_environment);
+        errno = saved_errno;
+        return result;
     }
     if (wrap == WRAP_ERROR) {
         return -1;
@@ -730,16 +841,26 @@ static int spawn_wrapped(posix_spawn_function function, pid_t *pid,
         const posix_spawnattr_t *attributes, char *const argv[],
         char *const envp[]) {
     struct loader_invocation invocation = { 0 };
+    struct environment_override final_environment = { 0 };
     enum wrap_result wrap = build_loader_arguments(path, argv, envp,
         &invocation);
     int result;
+    int final_result;
 
     if (wrap == WRAP_ERROR) {
         return errno != 0 ? errno : ENOMEM;
     }
     if (wrap == WRAP_NO) {
-        return function(pid, redirect_exec_path(path, envp), file_actions,
-            attributes, argv, envp);
+        final_result = build_final_environment(
+            path, envp, &final_environment);
+        if (final_result < 0) {
+            return errno != 0 ? errno : ENOMEM;
+        }
+        result = function(pid, redirect_exec_path(path, envp), file_actions,
+            attributes, argv,
+            final_result > 0 ? final_environment.values : envp);
+        free_environment_override(&final_environment);
+        return result;
     }
     result = function(pid, invocation.arguments[0], file_actions, attributes,
         invocation.arguments, invocation.environment);
