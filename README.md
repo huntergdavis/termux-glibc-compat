@@ -195,6 +195,15 @@ Pressure Vessel to Bubblewrap on the Tab S8+, but the kernel then returned
 `EINVAL` for user namespaces and `EPERM` for mount namespaces. It is therefore
 tested groundwork, not a replacement for the game-boundary PRoot process.
 
+The same shim can expose a validated userspace route shadow to native Wine.
+Android denies unrooted apps access to `/proc/net`, which makes Wine report no
+usable network even though ordinary sockets work. Setting
+`TGCOMPAT_PROC_NET=/absolute/private/directory` redirects read-only opens and
+metadata queries for `/proc/net`, `/proc/self/net`, and
+`/proc/thread-self/net` to that directory. Mutation requests are never
+redirected. The caller remains responsible for validating the directory and
+its `route`/`ipv6_route` files before enabling the policy.
+
 `build/libtgcompat-robust.so` is a narrowly gated Steam compatibility
 experiment. Valve's ARM64 IPC code queries `get_robust_list(0, ...)` and aborts
 when Termux glibc returns `ENOSYS`. With `TGCOMPAT_ROBUST_LIST=1`, the shim

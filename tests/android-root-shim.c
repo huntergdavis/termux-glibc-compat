@@ -1,17 +1,27 @@
 #define _GNU_SOURCE
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "tgcompat/android_root.h"
 
 int main(void) {
+    char proc_net_template[] = "/tmp/tgcompat-proc-net-XXXXXX";
+    char route_path[PATH_MAX];
+    char rewritten[PATH_MAX];
+    char line[64];
+    const char *mapped;
     struct stat metadata;
+    DIR *directory;
+    FILE *stream;
     int descriptor;
     int retry_flags = -1;
     int original = O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY;
@@ -46,6 +56,61 @@ int main(void) {
     assert(S_ISDIR(metadata.st_mode));
     assert(close(descriptor) == 0);
 
-    puts("Android real-root shim policy: PASS");
+    assert(unsetenv("TGCOMPAT_PROC_NET") == 0);
+    mapped = tgcompat_android_root_rewrite_proc_net("/proc/net/route",
+        rewritten, sizeof(rewritten));
+    assert(mapped != NULL && strcmp(mapped, "/proc/net/route") == 0);
+    assert(mkdtemp(proc_net_template) == proc_net_template);
+    assert(snprintf(route_path, sizeof(route_path), "%s/route",
+        proc_net_template) > 0);
+    stream = fopen(route_path, "w");
+    assert(stream != NULL);
+    assert(fputs("mapped-route\n", stream) >= 0);
+    assert(fclose(stream) == 0);
+    assert(setenv("TGCOMPAT_PROC_NET", proc_net_template, 1) == 0);
+
+    mapped = tgcompat_android_root_rewrite_proc_net("/proc/net/route",
+        rewritten, sizeof(rewritten));
+    assert(mapped == rewritten && strcmp(mapped, route_path) == 0);
+    mapped = tgcompat_android_root_rewrite_proc_net("/proc/self/net/route",
+        rewritten, sizeof(rewritten));
+    assert(mapped == rewritten && strcmp(mapped, route_path) == 0);
+    mapped = tgcompat_android_root_rewrite_proc_net(
+        "/proc/thread-self/net/route", rewritten, sizeof(rewritten));
+    assert(mapped == rewritten && strcmp(mapped, route_path) == 0);
+    mapped = tgcompat_android_root_rewrite_proc_net("/proc/network/route",
+        rewritten, sizeof(rewritten));
+    assert(mapped != NULL && strcmp(mapped, "/proc/network/route") == 0);
+    errno = 0;
+    assert(tgcompat_android_root_rewrite_proc_net("/proc/net/route",
+        rewritten, 2) == NULL);
+    assert(errno == ENAMETOOLONG);
+
+    stream = fopen("/proc/net/route", "r");
+    assert(stream != NULL && fgets(line, sizeof(line), stream) == line);
+    assert(strcmp(line, "mapped-route\n") == 0 && fclose(stream) == 0);
+    stream = fopen64("/proc/self/net/route", "r");
+    assert(stream != NULL && fgets(line, sizeof(line), stream) == line);
+    assert(strcmp(line, "mapped-route\n") == 0 && fclose(stream) == 0);
+    descriptor = open("/proc/net/route", O_RDONLY | O_CLOEXEC);
+    assert(descriptor >= 0 && close(descriptor) == 0);
+    descriptor = open64("/proc/self/net/route", O_RDONLY | O_CLOEXEC);
+    assert(descriptor >= 0 && close(descriptor) == 0);
+    descriptor = openat(AT_FDCWD, "/proc/thread-self/net/route",
+        O_RDONLY | O_CLOEXEC);
+    assert(descriptor >= 0 && close(descriptor) == 0);
+    assert(access("/proc/net/route", R_OK) == 0);
+    assert(stat("/proc/self/net/route", &metadata) == 0 &&
+        metadata.st_size == 13);
+    assert(lstat("/proc/thread-self/net/route", &metadata) == 0 &&
+        metadata.st_size == 13);
+    directory = opendir("/proc/net");
+    assert(directory != NULL && closedir(directory) == 0);
+
+    assert(unsetenv("TGCOMPAT_PROC_NET") == 0);
+    assert(unlink(route_path) == 0);
+    assert(rmdir(proc_net_template) == 0);
+
+    puts("Android real-root and proc-net shim policy: PASS");
     return 0;
 }
