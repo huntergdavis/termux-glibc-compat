@@ -204,6 +204,12 @@ metadata queries for `/proc/net`, `/proc/self/net`, and
 redirected. The caller remains responsible for validating the directory and
 its `route`/`ipv6_route` files before enabling the policy.
 
+`TGCOMPAT_PROC_STAT=/absolute/private/file` similarly redirects read-only opens
+and metadata queries for exactly `/proc/stat`. It does not affect
+`/proc/self/stat` or mutation requests. This lets a caller provide CPU topology
+to glibc software when Android denies the real aggregate proc file; the caller
+must validate and maintain the synthetic file.
+
 `build/libtgcompat-robust.so` is a narrowly gated Steam compatibility
 experiment. Valve's ARM64 IPC code queries `get_robust_list(0, ...)` and aborts
 when Termux glibc returns `ENOSYS`. With `TGCOMPAT_ROBUST_LIST=1`, the shim

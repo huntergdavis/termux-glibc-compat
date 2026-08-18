@@ -8,5 +8,9 @@ bool tgcompat_android_root_retry_flags(const char *path, int flags,
     int error, int *retry_flags);
 const char *tgcompat_android_root_rewrite_proc_net(const char *path,
     char *output, size_t output_size);
+const char *tgcompat_android_root_rewrite_proc_stat(const char *path,
+    char *output, size_t output_size);
+const char *tgcompat_android_root_rewrite_proc(const char *path,
+    char *output, size_t output_size);
 
 #endif

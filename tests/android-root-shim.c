@@ -15,6 +15,7 @@
 
 int main(void) {
     char proc_net_template[PATH_MAX];
+    char proc_stat_path[PATH_MAX];
     char route_path[PATH_MAX];
     char rewritten[PATH_MAX];
     char line[64];
@@ -79,6 +80,19 @@ int main(void) {
     assert(fclose(stream) == 0);
     assert(setenv("TGCOMPAT_PROC_NET", proc_net_template, 1) == 0);
 
+    written = snprintf(proc_stat_path, sizeof(proc_stat_path), "%s/proc-stat",
+        proc_net_template);
+    assert(written > 0 && (size_t)written < sizeof(proc_stat_path));
+    stream = fopen(proc_stat_path, "w");
+    assert(stream != NULL);
+    assert(fputs("cpu  0 0 0 0 0 0 0 0 0 0\n", stream) >= 0);
+    assert(fclose(stream) == 0);
+    assert(unsetenv("TGCOMPAT_PROC_STAT") == 0);
+    mapped = tgcompat_android_root_rewrite_proc_stat("/proc/stat",
+        rewritten, sizeof(rewritten));
+    assert(mapped != NULL && strcmp(mapped, "/proc/stat") == 0);
+    assert(setenv("TGCOMPAT_PROC_STAT", proc_stat_path, 1) == 0);
+
     mapped = tgcompat_android_root_rewrite_proc_net("/proc/net/route",
         rewritten, sizeof(rewritten));
     assert(mapped == rewritten && strcmp(mapped, route_path) == 0);
@@ -94,6 +108,20 @@ int main(void) {
     errno = 0;
     assert(tgcompat_android_root_rewrite_proc_net("/proc/net/route",
         rewritten, 2) == NULL);
+    assert(errno == ENAMETOOLONG);
+
+    mapped = tgcompat_android_root_rewrite_proc_stat("/proc/stat",
+        rewritten, sizeof(rewritten));
+    assert(mapped == rewritten && strcmp(mapped, proc_stat_path) == 0);
+    mapped = tgcompat_android_root_rewrite_proc("/proc/stat", rewritten,
+        sizeof(rewritten));
+    assert(mapped == rewritten && strcmp(mapped, proc_stat_path) == 0);
+    mapped = tgcompat_android_root_rewrite_proc_stat("/proc/self/stat",
+        rewritten, sizeof(rewritten));
+    assert(mapped != NULL && strcmp(mapped, "/proc/self/stat") == 0);
+    errno = 0;
+    assert(tgcompat_android_root_rewrite_proc_stat("/proc/stat", rewritten,
+        2) == NULL);
     assert(errno == ENAMETOOLONG);
 
     stream = fopen("/proc/net/route", "r");
@@ -117,10 +145,28 @@ int main(void) {
     directory = opendir("/proc/net");
     assert(directory != NULL && closedir(directory) == 0);
 
+    stream = fopen("/proc/stat", "r");
+    assert(stream != NULL && fgets(line, sizeof(line), stream) == line);
+    assert(strcmp(line, "cpu  0 0 0 0 0 0 0 0 0 0\n") == 0 &&
+        fclose(stream) == 0);
+    descriptor = open("/proc/stat", O_RDONLY | O_CLOEXEC);
+    assert(descriptor >= 0 && close(descriptor) == 0);
+    descriptor = openat(AT_FDCWD, "/proc/stat", O_RDONLY | O_CLOEXEC);
+    assert(descriptor >= 0 && close(descriptor) == 0);
+    assert(access("/proc/stat", R_OK) == 0);
+    assert(stat("/proc/stat", &metadata) == 0 &&
+        metadata.st_size ==
+            (off_t)(sizeof("cpu  0 0 0 0 0 0 0 0 0 0\n") - 1));
+    assert(lstat("/proc/stat", &metadata) == 0 &&
+        metadata.st_size ==
+            (off_t)(sizeof("cpu  0 0 0 0 0 0 0 0 0 0\n") - 1));
+
     assert(unsetenv("TGCOMPAT_PROC_NET") == 0);
+    assert(unsetenv("TGCOMPAT_PROC_STAT") == 0);
+    assert(unlink(proc_stat_path) == 0);
     assert(unlink(route_path) == 0);
     assert(rmdir(proc_net_template) == 0);
 
-    puts("Android real-root and proc-net shim policy: PASS");
+    puts("Android real-root and proc shadow shim policy: PASS");
     return 0;
 }

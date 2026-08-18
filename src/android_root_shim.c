@@ -140,6 +140,41 @@ const char *tgcompat_android_root_rewrite_proc_net(const char *path,
     return output;
 }
 
+const char *tgcompat_android_root_rewrite_proc_stat(const char *path,
+        char *output, size_t output_size) {
+    const char *target;
+    size_t target_length;
+
+    if (path == NULL || strcmp(path, "/proc/stat") != 0) {
+        return path;
+    }
+    target = getenv("TGCOMPAT_PROC_STAT");
+    if (target == NULL || target[0] != '/') {
+        return path;
+    }
+    target_length = strlen(target);
+    if (target_length < 2 || target[target_length - 1] == '/') {
+        return path;
+    }
+    if (output == NULL || output_size == 0 || target_length >= output_size) {
+        errno = ENAMETOOLONG;
+        return NULL;
+    }
+    memcpy(output, target, target_length + 1);
+    return output;
+}
+
+const char *tgcompat_android_root_rewrite_proc(const char *path,
+        char *output, size_t output_size) {
+    const char *mapped = tgcompat_android_root_rewrite_proc_stat(path,
+        output, output_size);
+
+    if (mapped == NULL || mapped != path) {
+        return mapped;
+    }
+    return tgcompat_android_root_rewrite_proc_net(path, output, output_size);
+}
+
 static bool enabled(void) {
     const char *value = getenv("TGCOMPAT_ANDROID_ROOT_O_PATH");
 
@@ -197,7 +232,7 @@ static const char *mapped_open_path(const char *path, int flags,
     if (!read_only_open(flags)) {
         return path;
     }
-    return tgcompat_android_root_rewrite_proc_net(path, output, PATH_MAX);
+    return tgcompat_android_root_rewrite_proc(path, output, PATH_MAX);
 }
 
 static int call_open(open_function function, const char *path, int flags,
@@ -339,7 +374,7 @@ static FILE *call_fopen(fopen_function function, const char *path,
     const char *mapped = path;
 
     if (read_only_fopen_mode(mode)) {
-        mapped = tgcompat_android_root_rewrite_proc_net(path, rewritten,
+        mapped = tgcompat_android_root_rewrite_proc(path, rewritten,
             sizeof(rewritten));
     }
     if (function == NULL || mapped == NULL) {
@@ -361,7 +396,7 @@ __attribute__((visibility("default"))) FILE *fopen64(const char *path,
 
 __attribute__((visibility("default"))) DIR *opendir(const char *path) {
     char rewritten[PATH_MAX];
-    const char *mapped = tgcompat_android_root_rewrite_proc_net(path,
+    const char *mapped = tgcompat_android_root_rewrite_proc(path,
         rewritten, sizeof(rewritten));
 
     if (real_opendir == NULL || mapped == NULL) {
@@ -377,7 +412,7 @@ __attribute__((visibility("default"))) int access(const char *path,
     const char *mapped = path;
 
     if ((mode & W_OK) == 0) {
-        mapped = tgcompat_android_root_rewrite_proc_net(path, rewritten,
+        mapped = tgcompat_android_root_rewrite_proc(path, rewritten,
             sizeof(rewritten));
     }
     if (real_access == NULL || mapped == NULL) {
@@ -390,7 +425,7 @@ __attribute__((visibility("default"))) int access(const char *path,
 static int call_stat(stat_function function, const char *path,
         struct stat *buffer) {
     char rewritten[PATH_MAX];
-    const char *mapped = tgcompat_android_root_rewrite_proc_net(path,
+    const char *mapped = tgcompat_android_root_rewrite_proc(path,
         rewritten, sizeof(rewritten));
 
     if (function == NULL || mapped == NULL) {
